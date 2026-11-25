@@ -10,7 +10,7 @@
 	import { GameEngine } from '#lib/kids/engine/GameEngine';
 	import { GameUI } from '#lib/kids/ui/GameUI.svelte';
 	import { ProgressRepository } from '#lib/kids/storage/ProgressRepository';
-	import { applyMissionIntroduced, applyMissionResult } from '#lib/kids/game/MissionReward';
+	import { applyMissionIntroduced, applyMissionResult, applyMissionWrong } from '#lib/kids/game/MissionReward';
 	import { NO_ACCESSORY, resolveWearing } from '#lib/kids/data/accessories';
 	import { readWearingPreference, writeWearingPreference } from '#lib/kids/game/ProgressTypes';
 	import type { ChildProgress } from '#lib/kids/game/ProgressTypes';
@@ -79,8 +79,10 @@
 					helpOpen = false;
 				},
 				completedMissions: loaded.completedMissions,
+				missionPerformance: loaded.missionPerformance,
 				onMissionStart: (mission) => void recordIntroduced(mission),
-				onMissionComplete: (mission) => void recordCompletion(mission)
+				onMissionComplete: (mission) => void recordCompletion(mission),
+				onMissionWrong: (missionId) => void recordWrong(missionId)
 			});
 			if (!ui.soundOn) engine.setSoundEnabled(false);
 			// Put back the outfit from the last visit, silently: the child is
@@ -112,6 +114,13 @@
 		if (!progress) return;
 		progress = applyMissionResult(progress, mission);
 		ui.setStars(progress.totalStars);
+		await save();
+	}
+
+	/** A wrong answer: record it so the rotation can gently re-offer practice. */
+	async function recordWrong(missionId: string) {
+		if (!progress) return;
+		progress = applyMissionWrong(progress, missionId);
 		await save();
 	}
 

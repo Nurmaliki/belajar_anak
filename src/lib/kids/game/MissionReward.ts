@@ -27,6 +27,7 @@ export interface MissionResult {
 export function applyMissionResult(progress: ChildProgress, mission: MissionDefinition): ChildProgress {
 	let next = ProgressRepository.completeMission(progress, mission.id, mission.stars);
 	next = ProgressRepository.unlockArea(next, mission.area);
+	next = ProgressRepository.recordCompleted(next, mission.id);
 
 	const teaches = mission.teaches;
 	if (teaches) {
@@ -41,6 +42,18 @@ export function applyMissionResult(progress: ChildProgress, mission: MissionDefi
 		}
 	}
 	return next;
+}
+
+/**
+ * Record that the child answered a mission wrongly.
+ *
+ * Kept alongside `applyMissionResult` so the engine can report attempts
+ * through the same pure path the host already uses for stars — the engine
+ * never touches storage, and this keeps the adaptive signal in the same
+ * versioned, validated record as everything else.
+ */
+export function applyMissionWrong(progress: ChildProgress, missionId: string): ChildProgress {
+	return ProgressRepository.recordWrong(progress, missionId);
 }
 
 /**

@@ -27,6 +27,7 @@ import { getArea, AREAS } from '../data/areas';
 import { countingWord } from '../data/numbers';
 import type { GameUI, MissionPanelView } from '../ui/GameUI.svelte';
 import type { AreaId, MissionDefinition } from '../types';
+import type { MissionPerformance } from '../game/ProgressTypes';
 
 /**
  * The engine.
@@ -49,8 +50,12 @@ export interface GameEngineOptions {
 	onMissionStart?: (mission: MissionDefinition) => void;
 	/** Called once a mission is answered correctly. */
 	onMissionComplete?: (mission: MissionDefinition) => void;
+	/** Called when the child answers a mission wrongly (for the adaptive signal). */
+	onMissionWrong?: (missionId: string) => void;
 	/** Mission ids already completed, used to pick what an area offers next. */
 	completedMissions?: readonly string[];
+	/** Per-mission performance (wrong counts / first-try), for gentle adaptation. */
+	missionPerformance?: Readonly<Record<string, MissionPerformance>>;
 }
 
 /** How close Bubu must be to an area stage to enter its mission. */
@@ -96,6 +101,7 @@ export class GameEngine {
 	private onExit: () => void;
 	private onMissionStart: (mission: MissionDefinition) => void;
 	private onMissionComplete: (mission: MissionDefinition) => void;
+	private onMissionWrong: (missionId: string) => void;
 	/**
 	 * Mission ids already finished, newest last.
 	 *
@@ -104,6 +110,12 @@ export class GameEngine {
 	 * mission the child just finished until the page is reloaded.
 	 */
 	private completedMissions: readonly string[];
+	/**
+	 * Per-mission performance, refreshed from the host. Mutable for the same
+	 * reason as `completedMissions`: the rotation must reflect this session's
+	 * stumbles without waiting for a reload.
+	 */
+	private missionPerformance: Readonly<Record<string, MissionPerformance>>;
 	/** Current counting session, when a counting mission is active. */
 	private session: CountSession | null = null;
 	/** Current question session, for letter / syllable / picture missions. */
@@ -153,7 +165,9 @@ export class GameEngine {
 		this.onExit = options.onExit;
 		this.onMissionStart = options.onMissionStart ?? (() => {});
 		this.onMissionComplete = options.onMissionComplete ?? (() => {});
+		this.onMissionWrong = options.onMissionWrong ?? (() => {});
 		this.completedMissions = options.completedMissions ?? [];
+		this.missionPerformance = options.missionPerformance ?? {};
 		this.states = new StateManager({ strict: false });
 
 		this.sceneManager = new SceneManager(options.canvas);
@@ -214,7 +228,8 @@ export class GameEngine {
 			answerForTest: (value: string) => this.submitAnswer(value),
 			startMissionForTest: (id: string) => this.startMissionById(id),
 			/** Which mission an area would offer right now. */
-			nextMissionForTest: (area: AreaId) => nextMissionForArea(area, this.completedMissions),
+			nextMissionForTest: (area: AreaId) =>
+				nextMissionForArea(area, this.completedMissions, this.missionPerformance),
 			/** Leave the current mission the way the "keluar" button does. */
 			abandonMissionForTest: () => this.abandonMission(),
 			/**
@@ -417,6 +432,25 @@ export class GameEngine {
 	markMissionComplete(missionId: string): void {
 		if (this.completedMissions.includes(missionId)) return;
 		this.completedMissions = [...this.completedMissions, missionId];
+	}
+
+	/**
+	 * Record a wrong answer on the active mission.
+	 *
+	 * Reports to the host (which owns the saved progress) and mirrors the
+	 * signal locally so the rotation adapts within this session, the same way
+	 * `markMissionComplete` does. Refuses when no mission is active, so a
+	 * stray tap while exploring cannot skew the ledger.
+	 */
+	private recordWrongAnswer(): void {
+		if (!this.activeMission) return;
+		const id = this.activeMission.id;
+		const prev = this.missionPerformance[id] ?? { wrongCount: 0, firstTry: true, completedCount: 0 };
+		this.missionPerformance = {
+			...this.missionPerformance,
+			[id]: { ...prev, wrongCount: prev.wrongCount + 1, firstTry: false }
+		};
+		this.onMissionWrong(id);
 	}
 
 	/** What Bubu is wearing right now, by catalogue id. */
@@ -707,6 +741,7 @@ export class GameEngine {
 		const result = this.session.answer(value);
 		if (!result.correct) {
 			this.wrongChoices = [...this.wrongChoices, value];
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, coba sekali lagi!', { interrupt: true });
 			this.pushMissionView();
@@ -730,6 +765,7 @@ export class GameEngine {
 			// wobble, no narration, just ignore it.
 			if (result.step !== 'answered-wrong') return;
 			this.wrongChoices = [...this.choiceSession.wrongChoices];
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, coba sekali lagi!', { interrupt: true });
 			this.pushMissionView();
@@ -751,6 +787,7 @@ export class GameEngine {
 		if (!result.correct) {
 			if (this.addSession.currentStep !== 'answered-wrong') return;
 			this.wrongChoices = [...this.addSession.wrongChoices];
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, hitung lagi!', { interrupt: true });
 			this.pushMissionView();
@@ -772,6 +809,7 @@ export class GameEngine {
 		if (!result.correct) {
 			if (this.compareSession.currentStep !== 'answered-wrong') return;
 			this.wrongChoices = [...this.compareSession.wrongChoices];
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, hitung lagi!', { interrupt: true });
 			this.pushMissionView();
@@ -793,6 +831,7 @@ export class GameEngine {
 		if (!result.correct) {
 			if (this.subtractSession.currentStep !== 'answered-wrong') return;
 			this.wrongChoices = [...this.subtractSession.wrongChoices];
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, hitung apel yang tersisa!', { interrupt: true });
 			this.pushMissionView();
@@ -815,6 +854,7 @@ export class GameEngine {
 			// A value never offered, or a pick during the wobble: ignore it.
 			if (this.sortSession.currentStep !== 'answered-wrong') return;
 			this.wrongChoices = this.sortSession.wrongChoices.map(String);
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, cari yang paling sedikit dulu!', { interrupt: true });
 			this.pushMissionView();
@@ -844,6 +884,7 @@ export class GameEngine {
 			// rather than blaming the child for the program's own slip.
 			if (this.buildSession.currentStep !== 'answered-wrong') return;
 			this.wrongChoices = [...this.buildSession.wrongChoices];
+			this.recordWrongAnswer();
 			this.audio.playSfx('gentle');
 			this.audio.speak('Belum tepat. Yuk, coba lagi!', { interrupt: true });
 			this.pushMissionView();
@@ -1233,7 +1274,7 @@ export class GameEngine {
 		if (area && area !== this.lastAreaEntered) {
 			this.lastAreaEntered = area;
 			// Every area now has missions; offer the next unfinished one.
-			this.startMissionById(nextMissionForArea(area, this.completedMissions));
+			this.startMissionById(nextMissionForArea(area, this.completedMissions, this.missionPerformance));
 		}
 	}
 

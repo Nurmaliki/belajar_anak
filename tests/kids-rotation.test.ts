@@ -58,6 +58,40 @@ describe('nextMissionForArea', () => {
 	});
 });
 
+describe('nextMissionForArea — gentle adaptive (ZPD)', () => {
+	it('keeps the normal forward path when no mission is hard', () => {
+		// A single stumble is not "hard": the rotation should not stall on it.
+		const perf = { 'count-apples-5': { wrongCount: 1, firstTry: false, completedCount: 0 } };
+		expect(nextMissionForArea('counting', [], perf)).toBe('count-apples-3');
+	});
+
+	it('re-offers an unfinished mission the child has clearly struggled with', () => {
+		const perf = { 'count-apples-5': { wrongCount: 3, firstTry: false, completedCount: 0 } };
+		// Even though count-apples-3 is first in the rotation, the child has
+		// not struggled with it; the hard one gets another shot first.
+		const next = nextMissionForArea('counting', [], perf);
+		expect(next).toBe('count-apples-5');
+	});
+
+	it('never re-offers a mission that is already completed', () => {
+		const perf = { 'count-apples-3': { wrongCount: 4, firstTry: false, completedCount: 1 } };
+		const next = nextMissionForArea('counting', ['count-apples-3'], perf);
+		expect(next).not.toBe('count-apples-3');
+		expect(next).toBe('count-apples-5');
+	});
+
+	it('prefers the easiest win once an area is fully done', () => {
+		const all = Object.values(MISSIONS)
+			.filter((m) => m.area === 'colors')
+			.map((m) => m.id);
+		const perf = {
+			'color-merah': { wrongCount: 4, firstTry: false, completedCount: 1 },
+			'color-biru': { wrongCount: 0, firstTry: true, completedCount: 2 }
+		};
+		expect(nextMissionForArea('colors', all, perf)).toBe('color-biru');
+	});
+});
+
 describe('areaMissionCount', () => {
 	it('matches the number of missions actually defined per area', () => {
 		for (const area of AREA_ORDER) {

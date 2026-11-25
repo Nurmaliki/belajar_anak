@@ -185,6 +185,50 @@ export class ProgressRepository {
 		};
 	}
 
+	/** Record that the child gave a wrong answer on a mission. */
+	static recordWrong(p: ChildProgress, missionId: string): ChildProgress {
+		const prev = p.missionPerformance[missionId] ?? {
+			wrongCount: 0,
+			completedCount: 0,
+			firstTry: false
+		};
+		return {
+			...p,
+			missionPerformance: {
+				...p.missionPerformance,
+				[missionId]: { ...prev, wrongCount: prev.wrongCount + 1, firstTry: false }
+			}
+		};
+	}
+
+	/**
+	 * Record that a mission was completed, updating its performance signal.
+	 *
+	 * Each successful completion halves the struggle weight (`wrongCount`), so
+	 * a mission that was once hard stops being flagged as such once the child
+	 * masters it — gentle, no permanent label. `firstTry` is sticky-once-true,
+	 * i.e. it records "was ever finished cleanly", and a mission the child
+	 * ever fumbled counts toward review regardless of later clean plays.
+	 */
+	static recordCompleted(p: ChildProgress, missionId: string): ChildProgress {
+		const prev = p.missionPerformance[missionId] ?? {
+			wrongCount: 0,
+			completedCount: 0,
+			firstTry: true
+		};
+		return {
+			...p,
+			missionPerformance: {
+				...p.missionPerformance,
+				[missionId]: {
+					wrongCount: Math.floor(prev.wrongCount / 2),
+					completedCount: prev.completedCount + 1,
+					firstTry: prev.firstTry && prev.wrongCount === 0
+				}
+			}
+		};
+	}
+
 	/** Record that a letter was shown to the child. */
 	static introduceLetter(p: ChildProgress, letter: string): ChildProgress {
 		const l = letter.toUpperCase();

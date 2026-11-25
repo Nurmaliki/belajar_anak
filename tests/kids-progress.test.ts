@@ -5,6 +5,7 @@ import {
 	migrateProgress,
 	validateProgress
 } from '../src/lib/kids/game/ProgressTypes';
+import { ProgressRepository } from '../src/lib/kids/storage/ProgressRepository';
 
 describe('emptyProgress', () => {
 	it('is a valid, versioned record', () => {
@@ -96,5 +97,72 @@ describe('migrateProgress', () => {
 
 	it('passes through non-objects unchanged for the validator to reject', () => {
 		expect(migrateProgress(null)).toBe(null);
+	});
+
+	it('v3 migration adds missionPerformance when missing from a v2 record', () => {
+		const v2 = { totalStars: 5, version: 2 };
+		const migrated = migrateProgress(v2) as { version: number; missionPerformance: object };
+		expect(migrated.version).toBe(3);
+		expect(typeof migrated.missionPerformance).toBe('object');
+	});
+});
+
+describe('missionPerformance — adaptive performance recording', () => {
+	it('emptyProgress initialises with no performance history', () => {
+		expect(emptyProgress().missionPerformance).toEqual({});
+	});
+
+	it('recordWrong increments wrongCount on a fresh record', () => {
+		let p = emptyProgress();
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		expect(p.missionPerformance['count-apples-3']).toEqual({
+			wrongCount: 1,
+			firstTry: false,
+			completedCount: 0
+		});
+	});
+
+	it('recordWrong accumulates wrongCount across multiple calls', () => {
+		let p = emptyProgress();
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		expect(p.missionPerformance['count-apples-3'].wrongCount).toBe(3);
+	});
+
+	it('recordCompleted sets completedCount and preserves wrongCount', () => {
+		let p = emptyProgress();
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordCompleted(p, 'count-apples-3');
+		expect(p.missionPerformance['count-apples-3'].completedCount).toBe(1);
+		// wrongCount should halve after each clean completion (gentle recovery)
+		expect(p.missionPerformance['count-apples-3'].wrongCount).toBe(1);
+	});
+
+	it('recordCompleted sets firstTry:false after any wrong answer', () => {
+		let p = emptyProgress();
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordCompleted(p, 'count-apples-3');
+		expect(p.missionPerformance['count-apples-3'].firstTry).toBe(false);
+	});
+
+	it('recordCompleted keeps firstTry:true only when no wrong was ever recorded', () => {
+		let p = emptyProgress();
+		p = ProgressRepository.recordCompleted(p, 'count-apples-3');
+		expect(p.missionPerformance['count-apples-3'].firstTry).toBe(true);
+	});
+
+	it('successful completions halve wrongCount: 4 → 2 → 1 → 0', () => {
+		let p = emptyProgress();
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		p = ProgressRepository.recordWrong(p, 'count-apples-3');
+		expect(p.missionPerformance['count-apples-3'].wrongCount).toBe(4);
+		p = ProgressRepository.recordCompleted(p, 'count-apples-3'); // 4/2=2
+		p = ProgressRepository.recordCompleted(p, 'count-apples-3'); // 2/2=1
+		p = ProgressRepository.recordCompleted(p, 'count-apples-3'); // 1/2=0
+		expect(p.missionPerformance['count-apples-3'].wrongCount).toBe(0);
 	});
 });

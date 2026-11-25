@@ -1,4 +1,5 @@
 import type { AreaId, MissionDefinition } from '../types';
+import type { MissionPerformance } from '../game/ProgressTypes';
 import { countAndAnswerMission } from '../activities/counting/countingMission';
 import { additionMission } from '../activities/addition/additionMission';
 import { compareMission } from '../activities/compare/compareMission';
@@ -517,19 +518,45 @@ export function missionsForArea(area: AreaId): MissionDefinition[] {
 }
 
 /**
- * The mission an area should offer next.
+ * The mission an area should offer next — gentle adaptive (ZPD): a child who
+ * struggled with a mission is offered it again before anything new, so they
+ * practise where they need it; a child who sails through keeps moving through
+ * the rotation. All missions stay reachable and nothing is ever locked.
  *
- * Walks the rotation and returns the first one the child has not completed,
- * falling back to the start once the area is finished so there is always
- * something to do. This is what makes finishing a letter lead to the next one
- * instead of replaying "A" forever.
+ * `performance` maps mission id → { wrongCount, firstTry, completedCount }.
+ * A mission the child is still struggling with (`wrongCount >= 2`) is offered
+ * first. Otherwise the first *unfinished* mission in the rotation is offered
+ * (the plain forward path), falling back to the start once the area is
+ * finished so there is always something to do.
  */
-export function nextMissionForArea(area: AreaId, completed: readonly string[]): string {
+export function nextMissionForArea(
+	area: AreaId,
+	completed: readonly string[],
+	performance: Readonly<Record<string, MissionPerformance>> = {}
+): string {
 	const rotation = AREA_ROTATION[area];
+
+	// A mission the child is *still* struggling with (unfinished, 2+ wrong
+	// answers) is offered again before moving further along the rotation —
+	// practise where it is needed. Gentle: only unfinished missions compete,
+	// nothing is ever locked, and a single stumble never triggers this.
 	for (const id of rotation) {
-		if (!completed.includes(id)) return id;
+		if (completed.includes(id)) continue;
+		if ((performance[id]?.wrongCount ?? 0) >= 2) return id;
 	}
-	return rotation[0];
+
+	// Plain forward path: the first unfinished mission in rotation order.
+	const firstUnfinished = rotation.find((id) => !completed.includes(id));
+	if (firstUnfinished) return firstUnfinished;
+
+	// Area finished: keep it alive with the easiest win so replaying after
+	// mastery feels smooth, not punishing.
+	let best = rotation[0];
+	for (const id of rotation) {
+		const w = performance[id]?.wrongCount ?? 0;
+		if (w < (performance[best]?.wrongCount ?? 0)) best = id;
+	}
+	return best;
 }
 
 /** Exposed so the menu can show how many missions each area holds. */

@@ -6,7 +6,17 @@
  * correctly, and it never leaves the device.
  */
 
-export const PROGRESS_VERSION = 2;
+export const PROGRESS_VERSION = 3;
+
+/** Per-mission performance, recorded so the area rotation can adapt. */
+export interface MissionPerformance {
+	/** Number of wrong answers the child gave while trying this mission. */
+	wrongCount: number;
+	/** True when the mission was completed on the first try (no wrong answer). */
+	firstTry: boolean;
+	/** Number of times this mission has been completed. */
+	completedCount: number;
+}
 
 export interface LearningProgress {
 	introducedNumbers: number[];
@@ -32,6 +42,12 @@ export interface ChildProgress {
 	 * first launch. Defaults to `'none'`.
 	 */
 	wearing: string;
+	/**
+	 * Performance signal per mission id, for gentle adaptive difficulty.
+	 * Keys absent mean "never attempted"; every call records here before any
+	 * reward, so a mission a child struggles with is offered again sooner.
+	 */
+	missionPerformance: Record<string, MissionPerformance>;
 }
 
 export function emptyProgress(): ChildProgress {
@@ -50,7 +66,8 @@ export function emptyProgress(): ChildProgress {
 		},
 		totalPlayTimeSeconds: 0,
 		lastPlayedAt: null,
-		wearing: 'none'
+		wearing: 'none',
+		missionPerformance: {}
 	};
 }
 
@@ -103,6 +120,23 @@ export function validateProgress(raw: unknown): ValidationResult {
 	// "nothing on"; `resolveWearing` handles an id that no longer exists.
 	const wearing = typeof obj.wearing === 'string' && obj.wearing ? obj.wearing : 'none';
 
+	const missionPerformance: Record<string, MissionPerformance> = {};
+	const perfRaw =
+		typeof obj.missionPerformance === 'object' && obj.missionPerformance !== null
+			? (obj.missionPerformance as Record<string, unknown>)
+			: {};
+	for (const [id, p] of Object.entries(perfRaw)) {
+		const rec = (typeof p === 'object' && p !== null ? p : {}) as Record<string, unknown>;
+		const wrongCount = typeof rec.wrongCount === 'number' && rec.wrongCount >= 0 ? Math.floor(rec.wrongCount) : 0;
+		const completedCount =
+			typeof rec.completedCount === 'number' && rec.completedCount >= 0 ? Math.floor(rec.completedCount) : 0;
+		missionPerformance[id] = {
+			wrongCount,
+			completedCount,
+			firstTry: typeof rec.firstTry === 'boolean' ? rec.firstTry : wrongCount === 0 && completedCount === 0
+		};
+	}
+
 	const unlockedAreas = stringArray(obj.unlockedAreas ?? [], 'unlockedAreas');
 	if (typeof unlockedAreas === 'string') return { ok: false, error: unlockedAreas };
 	const completedMissions = stringArray(obj.completedMissions ?? [], 'completedMissions');
@@ -142,7 +176,8 @@ export function validateProgress(raw: unknown): ValidationResult {
 			},
 			totalPlayTimeSeconds,
 			lastPlayedAt: lastPlayedAt ?? base.lastPlayedAt,
-			wearing
+			wearing,
+			missionPerformance
 		}
 	};
 }
@@ -198,5 +233,9 @@ export function migrateProgress(raw: unknown): unknown {
 	if (version >= PROGRESS_VERSION) return obj;
 
 	if (version < 2 && typeof obj.wearing !== 'string') obj.wearing = 'none';
+	// Version 3 added `missionPerformance` (gentle adaptive difficulty). A
+	// v2 record simply has no performance history, which is the correct
+	// default: nothing adapted yet.
+	if (typeof obj.missionPerformance !== 'object') obj.missionPerformance = {};
 	return { ...obj, version: PROGRESS_VERSION };
 }
