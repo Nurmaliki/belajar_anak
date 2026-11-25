@@ -1,0 +1,32 @@
+{
+	"name": "Dunia Pintar 3D",
+	"short_name": "Dunia Pintar",
+	"description": "Petualangan 3D belajar untuk anak 3–5 tahun: berhitung, huruf, membaca, warna dan hewan, dalam Bahasa Indonesia.",
+	"lang": "id",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#1d271f",
+	"theme_color": "#7fd8ff",
+	"icons": [
+		{
+			"src": "/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-256.png",
+			"sizes": "256x256",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	]
+}
