@@ -5,8 +5,8 @@
  * tested in a plain node environment.
  */
 
-/** The five learning areas of the island. */
-export type AreaId = 'counting' | 'alphabet' | 'reading' | 'colors' | 'animals';
+/** The six learning areas of the island. */
+export type AreaId = 'counting' | 'alphabet' | 'reading' | 'colors' | 'animals' | 'music';
 
 export interface AreaDefinition {
 	id: AreaId;
@@ -48,6 +48,13 @@ export type MissionKind =
 	| 'pick-letter'
 	| 'build-syllables'
 	| 'pick-picture'
+	/** Identify an animal from its cry alone. The question is audio, so the
+	 *  mission carries `sound` and deliberately no `prompt` picture. */
+	| 'pick-by-sound'
+	/** Continue a repeating colour pattern: "what comes next?". */
+	| 'continue-pattern'
+	/** Which of two tones is higher or lower. The question is two notes, not a picture. */
+	| 'compare-pitch'
 	/** Assemble a word by tapping its syllables in order. */
 	| 'assemble-word'
 	/** Two groups of objects, how many altogether. */
@@ -115,6 +122,18 @@ export interface MissionDefinition {
 		numbers?: number[];
 		letters?: string[];
 		syllables?: string[];
+		/** Animal names, keyed the same way the animals catalogue spells them. */
+		animals?: string[];
+		/** Shape names, e.g. "Lingkaran". Colours are *not* listed here: a colour
+		 *  mission asks about a swatch, and `targetAnswer` already carries the
+		 *  colour name, so a separate list would be a second source of truth. */
+		shapes?: string[];
+		/** Colour names, e.g. "Merah". Kept separate from `shapes` so a parent
+		 *  can see "knows 4 colours" without it being diluted by shapes, and a
+		 *  future area that teaches colour mixing does not have to guess. */
+		colors?: string[];
+		/** Musical concepts, e.g. "Tinggi". Child-facing words, not note names. */
+		music?: string[];
 	};
 	/**
 	 * What the question panel shows above the answer buttons.
@@ -131,6 +150,37 @@ export interface MissionDefinition {
 	};
 	/** Stars awarded on success. */
 	stars: number;
+	/**
+	 * The cry to play, for `pick-by-sound` missions.
+	 *
+	 * Data, not a call: `MissionDefinition` stays free of Three.js and of the
+	 * audio manager so this table can be unit tested in plain Node. The engine
+	 * reads `cry` and `depth` and decides how to voice it.
+	 */
+	/**
+	 * The repeating rule, for `continue-pattern` missions, e.g. `['Merah',
+	 * 'Kuning']`.
+	 *
+	 * Stored rather than derived from `choices`: the panel draws the visible
+	 * sequence from it, and re-deriving the cycle from a shuffled button list
+	 * would be a guess dressed up as data.
+	 */
+	cycle?: string[];
+	/** How many items the pattern shows before the gap. */
+	visible?: number;
+	/**
+	 * The two frequencies played, for `compare-pitch` missions.
+	 *
+	 * Both stored, because the question is a comparison: the engine needs two
+	 * tones and the panel needs to know there are two sounds to wait for.
+	 */
+	pitches?: { low: number; high: number };
+	sound?: {
+		/** The onomatopoeia, e.g. "Meong". */
+		cry: string;
+		/** Voice depth, 0 = big animal, 1 = small. */
+		depth: number;
+	};
 }
 
 /** A single spoken line. `id` keys the audio cache. */

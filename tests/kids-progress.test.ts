@@ -102,8 +102,38 @@ describe('migrateProgress', () => {
 	it('v3 migration adds missionPerformance when missing from a v2 record', () => {
 		const v2 = { totalStars: 5, version: 2 };
 		const migrated = migrateProgress(v2) as { version: number; missionPerformance: object };
-		expect(migrated.version).toBe(3);
+		// The stamp is the *current* version, not the version that introduced
+		// the field: a record is migrated in one pass to whatever this build
+		// understands. Asserting the literal 3 made this test fail the day a
+		// v4 arrived, without anything actually being wrong.
+		expect(migrated.version).toBe(PROGRESS_VERSION);
 		expect(typeof migrated.missionPerformance).toBe('object');
+	});
+
+	it('v4 migration adds the animals, shapes and colours lists', () => {
+		// A v1 record predates every learning list beyond numbers/letters/
+		// syllables. Migrating it must not throw and must leave the new lists
+		// empty — a child who played before these missions existed has not
+		// learned the content, and inventing entries would be a lie in the
+		// parent dashboard.
+		const v1 = { totalStars: 7, version: 1, learningProgress: { introducedNumbers: [3] } };
+		const migrated = migrateProgress(v1) as {
+			version: number;
+			learningProgress: Record<string, string[]>;
+		};
+		expect(migrated.version).toBe(PROGRESS_VERSION);
+		for (const key of [
+			'introducedAnimals',
+			'correctAnimals',
+			'introducedShapes',
+			'correctShapes',
+			'introducedColors',
+			'correctColors'
+		]) {
+			expect(migrated.learningProgress[key], `${key} was not added`).toEqual([]);
+		}
+		// Existing progress survives the migration untouched.
+		expect(migrated.learningProgress.introducedNumbers).toEqual([3]);
 	});
 });
 

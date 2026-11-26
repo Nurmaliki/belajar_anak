@@ -5,7 +5,16 @@ export interface ChoiceMissionInput {
 	area: AreaId;
 	title: string;
 	instruction: string;
-	kind: Exclude<MissionKind, 'count-and-answer'>;
+	/**
+	 * What kind of question this is.
+	 *
+	 * Narrowed to the picture/letter/syllable kinds on purpose. A mission whose
+	 * question is asked by ear (`pick-by-sound`) or by sequence
+	 * (`continue-pattern`) has its own builder and its own session; letting them
+	 * through here would produce a mission with no `sound`/`cycle` data that the
+	 * lifecycle test would then accept as answerable.
+	 */
+	kind: Extract<MissionKind, 'pick-picture' | 'pick-letter' | 'build-syllables'>;
 	/** The correct choice, as the exact string that appears in `choices`. */
 	answer: string;
 	choices: string[];

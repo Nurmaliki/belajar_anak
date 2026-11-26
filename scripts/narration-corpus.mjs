@@ -69,7 +69,10 @@ export async function buildCorpus(loadModule) {
 	}
 
 	// --- Area name + tagline (narrateArea) ----------------------------------
-	const areaOrder = ['counting', 'alphabet', 'reading', 'colors', 'animals'];
+	// Derived from AREA_ORDER rather than typed out, so adding an area cannot
+	// silently skip its narration — this list was hand-maintained and would
+	// have quietly omitted Pulau Musik.
+	const areaOrder = [...areas.AREA_ORDER];
 	for (const id of areaOrder) {
 		const a = areas.AREAS[id];
 		entries.push({

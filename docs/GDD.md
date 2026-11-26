@@ -32,7 +32,7 @@ Explicitly avoided: photorealism, darkness, horror, harsh effects, clutter.
 
 ## 4. The world
 
-One island, five learning areas. Areas are reached by walking to them.
+One island, six learning areas. Areas are reached by walking to them.
 
 | # | Area | Indonesian name | Teaches |
 | --- | --- | --- | --- |

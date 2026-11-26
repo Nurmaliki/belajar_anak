@@ -6,7 +6,7 @@
  * correctly, and it never leaves the device.
  */
 
-export const PROGRESS_VERSION = 3;
+export const PROGRESS_VERSION = 4;
 
 /** Per-mission performance, recorded so the area rotation can adapt. */
 export interface MissionPerformance {
@@ -25,6 +25,41 @@ export interface LearningProgress {
 	correctLetters: string[];
 	introducedSyllables: string[];
 	correctSyllables: string[];
+	/**
+	 * Animal names shown and recognised.
+	 *
+	 * Version 4 added these, together with the animals/shapes lists below. The
+	 * animal and colour missions used to send `teaches: {}` — an empty object —
+	 * so a child could finish every one of them and the dashboard still said
+	 * nothing had been learned. Recording content the child *was not taught* is
+	 * the bug this schema prevents: the field exists so `teaches` has somewhere
+	 * honest to point.
+	 */
+	introducedAnimals: string[];
+	correctAnimals: string[];
+	/** Shape names (lingkaran, kotak, …) shown and recognised. */
+	introducedShapes: string[];
+	correctShapes: string[];
+	/**
+	 * Colour names recognised, from Kebun Warna's colour missions.
+	 *
+	 * Separate from shapes because the two are different skills even though
+	 * they share an area: "this is merah" and "this is a segitiga" are not the
+	 * same question, and a parent reading the dashboard should be able to see
+	 * which one their child has practised.
+	 */
+	introducedColors: string[];
+	correctColors: string[];
+	/**
+	 * Musical concepts recognised, from Pulau Musik.
+	 *
+	 * Values are the child-facing words themselves ("Tinggi", "Rendah"),
+	 * not note names: a preschooler learning that a sound can be high or low
+	 * has learned a concept, not a frequency. Storing "C5" would be true about
+	 * the audio and false about the child.
+	 */
+	introducedMusic: string[];
+	correctMusic: string[];
 }
 
 export interface ChildProgress {
@@ -62,7 +97,15 @@ export function emptyProgress(): ChildProgress {
 			introducedLetters: [],
 			correctLetters: [],
 			introducedSyllables: [],
-			correctSyllables: []
+			correctSyllables: [],
+			introducedAnimals: [],
+			correctAnimals: [],
+			introducedShapes: [],
+			correctShapes: [],
+			introducedColors: [],
+			correctColors: [],
+			introducedMusic: [],
+			correctMusic: []
 		},
 		totalPlayTimeSeconds: 0,
 		lastPlayedAt: null,
@@ -158,6 +201,22 @@ export function validateProgress(raw: unknown): ValidationResult {
 	if (typeof introducedSyllables === 'string') return { ok: false, error: introducedSyllables };
 	const correctSyllables = stringArray(lpRaw.correctSyllables ?? [], 'correctSyllables');
 	if (typeof correctSyllables === 'string') return { ok: false, error: correctSyllables };
+	const introducedAnimals = stringArray(lpRaw.introducedAnimals ?? [], 'introducedAnimals');
+	if (typeof introducedAnimals === 'string') return { ok: false, error: introducedAnimals };
+	const correctAnimals = stringArray(lpRaw.correctAnimals ?? [], 'correctAnimals');
+	if (typeof correctAnimals === 'string') return { ok: false, error: correctAnimals };
+	const introducedShapes = stringArray(lpRaw.introducedShapes ?? [], 'introducedShapes');
+	if (typeof introducedShapes === 'string') return { ok: false, error: introducedShapes };
+	const correctShapes = stringArray(lpRaw.correctShapes ?? [], 'correctShapes');
+	if (typeof correctShapes === 'string') return { ok: false, error: correctShapes };
+	const introducedColors = stringArray(lpRaw.introducedColors ?? [], 'introducedColors');
+	if (typeof introducedColors === 'string') return { ok: false, error: introducedColors };
+	const correctColors = stringArray(lpRaw.correctColors ?? [], 'correctColors');
+	if (typeof correctColors === 'string') return { ok: false, error: correctColors };
+	const introducedMusic = stringArray(lpRaw.introducedMusic ?? [], 'introducedMusic');
+	if (typeof introducedMusic === 'string') return { ok: false, error: introducedMusic };
+	const correctMusic = stringArray(lpRaw.correctMusic ?? [], 'correctMusic');
+	if (typeof correctMusic === 'string') return { ok: false, error: correctMusic };
 
 	return {
 		ok: true,
@@ -172,7 +231,15 @@ export function validateProgress(raw: unknown): ValidationResult {
 				introducedLetters,
 				correctLetters,
 				introducedSyllables,
-				correctSyllables
+				correctSyllables,
+				introducedAnimals,
+				correctAnimals,
+				introducedShapes,
+				correctShapes,
+				introducedColors,
+				correctColors,
+				introducedMusic,
+				correctMusic
 			},
 			totalPlayTimeSeconds,
 			lastPlayedAt: lastPlayedAt ?? base.lastPlayedAt,
@@ -237,5 +304,27 @@ export function migrateProgress(raw: unknown): unknown {
 	// v2 record simply has no performance history, which is the correct
 	// default: nothing adapted yet.
 	if (typeof obj.missionPerformance !== 'object') obj.missionPerformance = {};
+	// Version 4 added the animals and shapes learning lists. An older record
+	// has simply never had them tracked — the animal and colour missions sent
+	// an empty `teaches`, so there is nothing to recover and empty is the
+	// truthful answer. `validateProgress` fills them either way; doing it here
+	// keeps every schema change in one visible place.
+	if (typeof obj.learningProgress !== 'object' || obj.learningProgress === null) {
+		obj.learningProgress = {};
+	}
+	const lp = obj.learningProgress as Record<string, unknown>;
+	for (const key of [
+		'introducedAnimals',
+		'correctAnimals',
+		'introducedShapes',
+		'correctShapes',
+		'introducedColors',
+		'correctColors',
+		'introducedMusic',
+		'correctMusic'
+	]) {
+		if (!Array.isArray(lp[key])) lp[key] = [];
+	}
+	obj.learningProgress = lp;
 	return { ...obj, version: PROGRESS_VERSION };
 }

@@ -42,6 +42,11 @@ export function compareMission(input: CompareMissionInput): MissionDefinition {
 		kind: 'compare-groups',
 		compare: { left, right, mode },
 		choices: ['left', 'right'],
+		// Comparing two groups teaches both quantities: the child has to see
+		// "four" and "two" to say which is more. Leaving this empty meant the
+		// dashboard's number list never grew from compare missions, even though
+		// the child had just practised exactly those numbers.
+		teaches: { numbers: [left, right] },
 		stars: input.stars ?? 1
 	};
 }

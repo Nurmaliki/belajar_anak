@@ -2,10 +2,11 @@
 
 A 3D educational adventure game for children aged 3–5, in Indonesian.
 
-The child walks around a small island as **Bubu**, a bunny, and visits five
-learning areas: counting, letters, reading (syllables), colours & shapes, and
-animals. Every mission is playable entirely with one finger, narrated aloud,
-and never punished — a wrong answer wobbles and lets the child try again.
+The child walks around a small island as **Bubu**, a bunny, and visits six
+learning areas: counting, letters, reading (syllables), colours & shapes,
+animals, and music (pitch). Every mission is playable entirely with one finger,
+narrated aloud, and never punished — a wrong answer wobbles and lets the child
+try again.
 
 Built with **SvelteKit 3 + TypeScript (strict)**, **Three.js** and **Dexie.js**
 (IndexedDB).
@@ -60,7 +61,7 @@ suitable for a four-year-old.
 
 - **No punishment.** No lives, no timers, no leaderboards, no losing. A wrong
   answer is retried indefinitely.
-- **No locked content.** All five areas are open from the first launch. Content
+- **No locked content.** All six areas are open from the first launch. Content
   is not gated behind progress at this age.
 - **Large targets.** Interactive elements are at least 64 CSS px.
 - **Minimal text.** Instructions are spoken (Indonesian `speechSynthesis`) and

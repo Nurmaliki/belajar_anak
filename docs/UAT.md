@@ -24,7 +24,7 @@ pengembang dapat **menonton** alurnya sambil melihat bukti otomatis.
 ### UAT-1 — Boot & menu utama
 | Langkah | Langkah user | Hasil diharapkan |
 |---|---|---|
-| 1.1 | Buka halaman `/` | Kanvas 3D muncul, menu lima area tampil |
+| 1.1 | Buka halaman `/` | Kanvas 3D muncul, menu enam area tampil |
 | 1.2 | Perhatikan tampilan | Langit gradien, awan melayang, Bubu terlihat di dunia |
 | 1.3 | Klik tombol **Main** | Dunia masuk, misi berhitung pertama (3 apel) mulai |
 | **Kriteria** | — | Tidak ada error konsol; WebGL aktif |
@@ -79,6 +79,32 @@ pengembang dapat **menonton** alurnya sambil melihat bukti otomatis.
 | 9.1 | Misi huruf | Prompt berupa **gambar** + narasi suara, contoh kata **tidak dicetak** |
 | 9.2 | Jawab huruf benar | Menang |
 
+### UAT-9b — Tebak suara hewan (Hutan Hewan)
+| Langkah | Langkah user | Hasil diharapkan |
+|---|---|---|
+| 9b.1 | Masuk misi "Siapa yang Bersuara?" | Tombol speaker besar tampil, **tanpa gambar hewan** |
+| 9b.2 | Sebelum suara berbunyi, coba ketuk jawaban | **Tombol terkunci** — tidak ada yang dinilai salah |
+| 9b.3 | Tunggu / ketuk speaker | Suara hewan terdengar, tombol terbuka |
+| 9b.4 | Pilih hewan salah | Panel bergoyang, misi lanjut, tanpa hukuman |
+| 9b.5 | Pilih hewan benar | Menang, bintang |
+| **Kriteria** | — | Anak yang mengetuk dalam keadaan sunyi **tidak pernah** dicatat salah |
+
+### UAT-9c — Pola warna (Kebun Warna)
+| Langkah | Langkah user | Hasil diharapkan |
+|---|---|---|
+| 9c.1 | Masuk misi "Pola Merah Kuning" | Lima bundaran warna + satu slot kosong "?" |
+| 9c.2 | Pilih warna yang ada di pola tapi bukan urutannya (Merah) | Retry, tidak menang |
+| 9c.3 | Pilih warna yang benar (Kuning) | Slot terisi, menang |
+
+### UAT-9d — Pulau Musik: nada tinggi vs rendah
+| Langkah | Langkah user | Hasil diharapkan |
+|---|---|---|
+| 9d.1 | Masuk area Pulau Musik (ikon 🎵 di menu) | Patung xylophone terlihat; misi "Mana yang Lebih Tinggi?" mulai |
+| 9d.2 | Perhatikan dua titik nada | Titik terisi satu per satu saat nada berbunyi |
+| 9d.3 | Ketuk jawaban sebelum **kedua** nada berbunyi | Tombol terkunci; **tidak dinilai salah** |
+| 9d.4 | Setelah kedua nada, pilih "Rendah" (salah) | Retry, tanpa hukuman |
+| 9d.5 | Pilih "Tinggi" | Menang, bintang, tercatat di dashboard |
+
 ### UAT-10 — Bimo, pemandu ramah
 | Langkah | Langkah user | Hasil diharapkan |
 |---|---|---|
@@ -101,6 +127,12 @@ pengembang dapat **menonton** alurnya sambil melihat bukti otomatis.
 | 12.3 | Cek per area | Satu baris per area; area selesai; area belum dicoba |
 | 12.4 | Cek **Coba berikutnya** | Rekomendasi misi dari area paling tertinggal |
 | 12.5 | Status suara | Info suara perangkat ditampilkan |
+| 12.6 | Cek **Penguasaan** | Angka Dikuasai / Sedang dilatih / Belum dicoba / Benar sekali coba |
+| 12.7 | Belum ada misi selesai | "Benar sekali coba" menampilkan **—**, bukan 0% |
+| 12.8 | Selesaikan 1 misi bersih + 1 misi dengan salah | Dikuasai=1, Sedang dilatih=1 |
+| 12.9 | Cek **Latihan yang Membantu** | Misi yang masih salah muncul, tersulit dulu |
+| 12.10 | Cek **Ide Bermain Tanpa Layar** | Saran hanya dari area yang sudah dicoba |
+| 12.11 | Cek catatan grafik | Halaman **menyatakan** tidak ada grafik waktu (data waktu tidak disimpan) |
 
 ### UAT-13 — PWA: installable & offline
 | Langkah | Langkah user | Hasil diharapkan |

@@ -31,7 +31,7 @@ src/routes/+page.svelte               route shell (the game is the root page)
 | `AccessoryRenderer.ts` | builds one accessory from primitives and parents it to the right rig group; `dispose()` leaves nothing behind |
 | `InputManager.ts` | keyboard + pointer, unified axes, edge-triggered actions |
 | `InteractionManager.ts` | raycasting, hover/select, hit-testing large targets |
-| `WorldManager.ts` | terrain, props, five areas, apple trees, colliders |
+| `WorldManager.ts` | terrain, props, six areas, apple trees, colliders |
 | `AudioManager.ts` | bundled MP3 narration (native Indonesian voice) + speechSynthesis fallback + SFX + music; no overlapping narration |
 
 ### `src/lib/kids/game/` — rules, no Three.js imports
@@ -62,10 +62,26 @@ no DOM, no storage, so it is unit tested directly.
 | `sorting/sortMission.ts` | builds sort-groups missions, storing the groups already sorted |
 | `subtraction/SubtractionSession.ts` | some objects are taken away; the remainder is matched numerically and must stay positive |
 | `subtraction/subtractionMission.ts` | builds subtract-groups missions, rejecting ones whose remainder is not offered |
+| `sounds/SoundSession.ts` | identify an animal by its cry; **every answer is refused until the sound has played** |
+| `sounds/soundMission.ts` | builds pick-by-sound missions; deliberately carries no prompt picture |
+| `patterns/PatternSession.ts` | continue a repeating colour cycle; refuses a cycle that repeats inside one turn |
+| `patterns/patternMission.ts` | builds continue-pattern missions, computing the answer from the cycle |
+| `music/PitchSession.ts` | which of two tones is higher/lower; **both tones must play before any answer counts** |
+| `music/pitchMission.ts` | builds compare-pitch missions; derives its own two labels |
+
+Two activity families ask their question by **ear** rather than by sight, and both
+encode the same rule: a question that has not been heard has not been asked.
+`SoundSession` needs one sound before it unlocks, `PitchSession` needs two —
+because a comparison needs two things to compare. Neither records a refused tap
+as a mistake, because the child was not answering a question.
 
 ### `src/lib/kids/data/`
 `numbers.ts`, `alphabet.ts`, `syllables.ts`, `animals.ts`, `colors.ts`,
-`missions.ts` — all Indonesian learning content.
+`music.ts`, `missions.ts` — all Indonesian learning content.
+
+`music.ts` holds two pitches (C4/C5) and two beat lengths. It stores
+**frequencies and child-facing words, never note names**: a three-year-old
+learning that a sound can be high or low has learned a concept, not a notation.
 
 `accessories.ts` is content too, but it carries a rule: every accessory is
 available from the first launch, with no unlock condition. It is kept free of

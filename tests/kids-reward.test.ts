@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyProgress } from '../src/lib/kids/game/ProgressTypes';
 import { applyMissionResult, applyMissionIntroduced, unlockedAreas } from '../src/lib/kids/game/MissionReward';
-import { getMission } from '../src/lib/kids/data/missions';
+import { getMission, MISSIONS } from '../src/lib/kids/data/missions';
 import { ProgressRepository } from '../src/lib/kids/storage/ProgressRepository';
 
 const count = getMission('count-apples-3')!;
@@ -137,5 +137,70 @@ describe('ProgressRepository letter and syllable helpers', () => {
 		let p = ProgressRepository.correctSyllable(emptyProgress(), 'ba');
 		p = ProgressRepository.correctSyllable(p, 'BA');
 		expect(p.learningProgress.correctSyllables).toEqual(['BA']);
+	});
+});
+
+describe('animal, shape and colour missions record what they teach', () => {
+	// Regression: these three mission builders used to emit `teaches: {}`.
+	// A child could complete every animal, shape and colour mission and the
+	// parent dashboard would still report nothing was learned, because there
+	// was nothing in the record for the dashboard to read.
+	const shape = getMission('shape-lingkaran')!;
+
+	it('the animal mission names its animal in `teaches`', () => {
+		expect(animal.teaches?.animals, 'animal mission teaches nothing').toEqual(['Sapi']);
+	});
+
+	it('the shape mission names its shape in `teaches`', () => {
+		expect(shape.teaches?.shapes, 'shape mission teaches nothing').toEqual(['Lingkaran']);
+	});
+
+	it('the colour mission names its colour in `teaches`', () => {
+		expect(color.teaches?.colors, 'colour mission teaches nothing').toEqual(['Merah']);
+	});
+
+	it('completing an animal mission records the animal as correct', () => {
+		const p = applyMissionResult(emptyProgress(), animal);
+		expect(p.learningProgress.correctAnimals).toEqual(['Sapi']);
+		expect(p.learningProgress.introducedAnimals).toEqual(['Sapi']);
+	});
+
+	it('completing a shape mission records the shape as correct', () => {
+		const p = applyMissionResult(emptyProgress(), shape);
+		expect(p.learningProgress.correctShapes).toEqual(['Lingkaran']);
+	});
+
+	it('completing a colour mission records the colour as correct', () => {
+		const p = applyMissionResult(emptyProgress(), color);
+		expect(p.learningProgress.correctColors).toEqual(['Merah']);
+	});
+
+	it('seeing a mission records the content as introduced but not correct', () => {
+		const p = applyMissionIntroduced(emptyProgress(), animal);
+		expect(p.learningProgress.introducedAnimals).toEqual(['Sapi']);
+		expect(p.learningProgress.correctAnimals).toEqual([]);
+	});
+
+	it('replaying a mission does not duplicate the entry', () => {
+		let p = applyMissionResult(emptyProgress(), animal);
+		p = applyMissionResult(p, animal);
+		expect(p.learningProgress.correctAnimals).toEqual(['Sapi']);
+	});
+
+	it('every mission teaches something', () => {
+		// A mission with no learning content cannot feed the dashboard. If one
+		// is ever added deliberately, this test is the place to record why.
+		for (const mission of Object.values(MISSIONS)) {
+			const t = mission.teaches ?? {};
+			const count =
+				(t.numbers?.length ?? 0) +
+				(t.letters?.length ?? 0) +
+				(t.syllables?.length ?? 0) +
+				(t.animals?.length ?? 0) +
+				(t.shapes?.length ?? 0) +
+				(t.colors?.length ?? 0) +
+				(t.music?.length ?? 0);
+			expect(count, `${mission.id} teaches nothing the dashboard can record`).toBeGreaterThan(0);
+		}
 	});
 });

@@ -6,6 +6,10 @@ import { compareMission } from '../activities/compare/compareMission';
 import { sortMission } from '../activities/sorting/sortMission';
 import { subtractionMission } from '../activities/subtraction/subtractionMission';
 import { choiceMission, assembleWordMission, distractors } from '../activities/choices/choiceMission';
+import { soundMission } from '../activities/sounds/soundMission';
+import { patternMission } from '../activities/patterns/patternMission';
+import { pitchMission } from '../activities/music/pitchMission';
+import { HIGH, LOW } from './music';
 import { LETTERS } from './alphabet';
 import { SYLLABLE_WORDS, SYLLABLES } from './syllables';
 import { ANIMALS } from './animals';
@@ -133,7 +137,10 @@ function animalMission(
 		kind: 'pick-picture',
 		answer: entry.name,
 		choices: [entry.name, ...distractors(ALL_ANIMAL_NAMES, entry.name, 3, seed)],
-		teaches: {},
+		// The dashboard records what was taught, so `teaches` must name the
+		// animal. It used to be `{}`: a child could finish every animal mission
+		// and the parent dashboard still reported nothing learned.
+		teaches: { animals: [entry.name] },
 		prompt: { icon: entry.icon, caption: entry.sound }
 	});
 }
@@ -154,7 +161,7 @@ function colorMission(
 		kind: 'pick-picture',
 		answer: colorName,
 		choices: [colorName, ...distractors(ALL_COLOR_NAMES, colorName, 3, seed)],
-		teaches: {},
+		teaches: { colors: [colorName] },
 		// A colour has no emoji of its own, so the prompt is a paint splat in
 		// the colour being asked about would need a real swatch; the caption
 		// carries the colour name instead and the swatch is drawn in CSS.
@@ -189,7 +196,9 @@ function shapeMission(
 		kind: 'pick-picture',
 		answer: entry.name,
 		choices: [entry.name, ...distractors(ALL_SHAPE_NAMES, entry.name, 3, seed)],
-		teaches: {},
+		// A shape mission teaches the shape, not a colour: the prompt is an
+		// outline in one flat tone precisely so the two cannot be confused.
+		teaches: { shapes: [entry.name] },
 		prompt: { icon: entry.icon, caption: `@shape:${entry.draw}` }
 	});
 }
@@ -419,6 +428,26 @@ export const MISSIONS: Record<string, MissionDefinition> = {
 		'Mana bentuk bintang? Bintang ada di langit malam.',
 		3
 	),
+	// Patterns. A different skill from "pick the colour": the child sees a
+	// sequence, works out the rule, and predicts the next item. The distractor
+	// is one of the colours already in the cycle, so the answer cannot be found
+	// by elimination — it has to come from the rule.
+	'pattern-merah-kuning': patternMission({
+		id: 'pattern-merah-kuning',
+		title: 'Pola Merah Kuning',
+		instruction: 'Lihat polanya. Merah, kuning, merah, kuning. Warna apa berikutnya?',
+		cycle: ['Merah', 'Kuning'],
+		visible: 5,
+		choices: ['Merah', 'Kuning', 'Biru']
+	}),
+	'pattern-biru-merah-kuning': patternMission({
+		id: 'pattern-biru-merah-kuning',
+		title: 'Pola Tiga Warna',
+		instruction: 'Lihat polanya. Biru, merah, kuning, biru, merah. Warna apa berikutnya?',
+		cycle: ['Biru', 'Merah', 'Kuning'],
+		visible: 5,
+		choices: ['Biru', 'Merah', 'Kuning']
+	}),
 
 	// --- Hutan Hewan --------------------------------------------------------
 	'animal-kucing': animalMission(
@@ -441,7 +470,68 @@ export const MISSIONS: Record<string, MissionDefinition> = {
 		'Ayam',
 		'Mana ayam? Ayam berkokok kukuruyuk.',
 		3
-	)
+	),
+	// Sound-only missions: the child hears a cry and picks who made it. No
+	// picture is shown, so this cannot be solved by matching images — it has to
+	// come from memory. Each distractor is a different animal, never the same
+	// species twice.
+	'sound-kucing': soundMission({
+		id: 'sound-kucing',
+		title: 'Siapa yang Bersuara?',
+		instruction: 'Dengarkan suaranya. Siapa yang bersuara meong?',
+		answer: 'Kucing',
+		choices: ['Kucing', 'Sapi', 'Bebek'],
+		sound: 'Meong',
+		depth: 0.55
+	}),
+	'sound-sapi': soundMission({
+		id: 'sound-sapi',
+		title: 'Siapa yang Bersuara Moo?',
+		instruction: 'Dengarkan suaranya. Siapa yang bersuara moo?',
+		answer: 'Sapi',
+		choices: ['Sapi', 'Ayam', 'Kucing'],
+		sound: 'Moo',
+		depth: 0.05
+	}),
+	'sound-bebek': soundMission({
+		id: 'sound-bebek',
+		title: 'Siapa yang Bersuara Kwek?',
+		instruction: 'Dengarkan suaranya. Siapa yang bersuara kwek kwek?',
+		answer: 'Bebek',
+		choices: ['Bebek', 'Gajah', 'Ayam'],
+		sound: 'Kwek kwek',
+		depth: 0.7
+	}),
+	'sound-gajah': soundMission({
+		id: 'sound-gajah',
+		title: 'Siapa yang Bersuara Keras?',
+		instruction: 'Dengarkan suaranya. Siapa yang bersuara keras dan panjang?',
+		answer: 'Gajah',
+		choices: ['Gajah', 'Bebek', 'Kucing'],
+		sound: 'Meraung',
+		depth: 0.0
+	}),
+
+	// --- Pulau Musik ---------------------------------------------------------
+	// Two tones are played, low then high; the child says which was higher.
+	// The frequency is the question, so these missions carry real notes, not
+	// speech: `AudioManager.playNote` sounds them.
+	'pitch-tinggi': pitchMission({
+		id: 'pitch-tinggi',
+		title: 'Mana yang Lebih Tinggi?',
+		instruction: 'Dengarkan dua nada. Mana yang lebih tinggi?',
+		answer: 'tinggi',
+		lowFrequency: LOW.frequency,
+		highFrequency: HIGH.frequency
+	}),
+	'pitch-rendah': pitchMission({
+		id: 'pitch-rendah',
+		title: 'Mana yang Lebih Rendah?',
+		instruction: 'Dengarkan dua nada lagi. Mana yang lebih rendah?',
+		answer: 'rendah',
+		lowFrequency: LOW.frequency,
+		highFrequency: HIGH.frequency
+	})
 };
 
 /** The order in which an area's missions are offered. */
@@ -495,9 +585,20 @@ export const AREA_ROTATION: Record<AreaId, string[]> = {
 		'shape-lingkaran',
 		'shape-segitiga',
 		'shape-kotak',
-		'shape-bintang'
+		'shape-bintang',
+		'pattern-merah-kuning',
+		'pattern-biru-merah-kuning'
 	],
-	animals: ['animal-kucing', 'animal-sapi', 'animal-ayam']
+	animals: [
+		'animal-kucing',
+		'animal-sapi',
+		'animal-ayam',
+		'sound-kucing',
+		'sound-sapi',
+		'sound-bebek',
+		'sound-gajah'
+	],
+	music: ['pitch-tinggi', 'pitch-rendah']
 };
 
 /** The first mission of each area, which is what entering the area offers. */
@@ -506,7 +607,8 @@ export const AREA_START_MISSION: Record<AreaId, string> = {
 	alphabet: 'letter-a',
 	reading: 'read-ba',
 	colors: 'color-merah',
-	animals: 'animal-kucing'
+	animals: 'animal-kucing',
+	music: 'pitch-tinggi'
 };
 
 export function getMission(id: string): MissionDefinition | undefined {

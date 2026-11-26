@@ -283,6 +283,106 @@ export class ProgressRepository {
 		};
 	}
 
+	/** Record that an animal was shown to the child. */
+	static introduceAnimal(p: ChildProgress, animal: string): ChildProgress {
+		if (p.learningProgress.introducedAnimals.includes(animal)) return p;
+		return {
+			...p,
+			learningProgress: {
+				...p.learningProgress,
+				introducedAnimals: [...p.learningProgress.introducedAnimals, animal]
+			}
+		};
+	}
+
+	/** Record that the child recognised an animal. */
+	static correctAnimal(p: ChildProgress, animal: string): ChildProgress {
+		const introduced = ProgressRepository.introduceAnimal(p, animal);
+		if (introduced.learningProgress.correctAnimals.includes(animal)) return introduced;
+		return {
+			...introduced,
+			learningProgress: {
+				...introduced.learningProgress,
+				correctAnimals: [...introduced.learningProgress.correctAnimals, animal]
+			}
+		};
+	}
+
+	/** Record that a shape was shown to the child. */
+	static introduceShape(p: ChildProgress, shape: string): ChildProgress {
+		if (p.learningProgress.introducedShapes.includes(shape)) return p;
+		return {
+			...p,
+			learningProgress: {
+				...p.learningProgress,
+				introducedShapes: [...p.learningProgress.introducedShapes, shape]
+			}
+		};
+	}
+
+	/** Record that the child recognised a shape. */
+	static correctShape(p: ChildProgress, shape: string): ChildProgress {
+		const introduced = ProgressRepository.introduceShape(p, shape);
+		if (introduced.learningProgress.correctShapes.includes(shape)) return introduced;
+		return {
+			...introduced,
+			learningProgress: {
+				...introduced.learningProgress,
+				correctShapes: [...introduced.learningProgress.correctShapes, shape]
+			}
+		};
+	}
+
+	/** Record that a colour was shown to the child. */
+	static introduceColor(p: ChildProgress, color: string): ChildProgress {
+		if (p.learningProgress.introducedColors.includes(color)) return p;
+		return {
+			...p,
+			learningProgress: {
+				...p.learningProgress,
+				introducedColors: [...p.learningProgress.introducedColors, color]
+			}
+		};
+	}
+
+	/** Record that the child recognised a colour. */
+	static correctColor(p: ChildProgress, color: string): ChildProgress {
+		const introduced = ProgressRepository.introduceColor(p, color);
+		if (introduced.learningProgress.correctColors.includes(color)) return introduced;
+		return {
+			...introduced,
+			learningProgress: {
+				...introduced.learningProgress,
+				correctColors: [...introduced.learningProgress.correctColors, color]
+			}
+		};
+	}
+
+	/** Record that a musical concept was shown to the child. */
+	static introduceMusic(p: ChildProgress, concept: string): ChildProgress {
+		if (p.learningProgress.introducedMusic.includes(concept)) return p;
+		return {
+			...p,
+			learningProgress: {
+				...p.learningProgress,
+				introducedMusic: [...p.learningProgress.introducedMusic, concept]
+			}
+		};
+	}
+
+	/** Record that the child recognised a musical concept. */
+	static correctMusic(p: ChildProgress, concept: string): ChildProgress {
+		const introduced = ProgressRepository.introduceMusic(p, concept);
+		if (introduced.learningProgress.correctMusic.includes(concept)) return introduced;
+		return {
+			...introduced,
+			learningProgress: {
+				...introduced.learningProgress,
+				correctMusic: [...introduced.learningProgress.correctMusic, concept]
+			}
+		};
+	}
+
 	/** Add an area to the unlocked set. */
 	static unlockArea(p: ChildProgress, areaId: string): ChildProgress {
 		if (p.unlockedAreas.includes(areaId)) return p;

@@ -371,6 +371,52 @@ export class AudioManager {
 	// --- sound effects ----------------------------------------------------
 
 	/**
+	 * Play a single musical note, for Pulau Musik.
+	 *
+	 * Separate from `playSfx` because the two answer different needs: an SFX is
+	 * a fixed, brief cue, while a pitch question needs a *sustained, tunable*
+	 * tone at a caller-chosen frequency — the frequency **is** the question.
+	 * Routing it through the SFX table would need a lookup that cannot express
+	 * an arbitrary pitch.
+	 *
+	 * Silent (not throwing) when there is no audio context: a child on a device
+	 * that cannot make sound should still see the question, and the session
+	 * keeps its buttons locked so nothing is scored unheard.
+	 *
+	 * @param frequency Hz. 261.63 is middle C, 523.25 the C above it.
+	 * @param duration  Seconds the tone is held.
+	 * @returns whether a tone was actually produced.
+	 */
+	playNote(frequency: number, duration = 0.9): boolean {
+		if (!Number.isFinite(frequency) || frequency <= 0) return false;
+		if (!this.settings.sfxEnabled || !this.audioContext || !this.masterGain) return false;
+		const ctx = this.audioContext;
+		const now = ctx.currentTime;
+		// A triangle wave sounds closer to a toy piano than a sine, and its
+		// harmonics make "high" and "low" easier to tell apart than a pure tone.
+		const osc = ctx.createOscillator();
+		const gain = ctx.createGain();
+		osc.type = 'triangle';
+		osc.frequency.setValueAtTime(frequency, now);
+		const peak = 0.18;
+		gain.gain.setValueAtTime(0.0001, now);
+		gain.gain.exponentialRampToValueAtTime(peak, now + 0.03);
+		// Hold, then release: a pluck would decay before a child registers it.
+		gain.gain.setValueAtTime(peak, now + duration * 0.6);
+		gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+		osc.connect(gain);
+		gain.connect(this.masterGain);
+		osc.start(now);
+		osc.stop(now + duration + 0.03);
+		return true;
+	}
+
+	/** Whether real tones can be produced right now (context unlocked). */
+	get canPlayTones(): boolean {
+		return this.audioContext !== null && this.masterGain !== null;
+	}
+
+	/**
 	 * A short synthesised tone.
 	 *
 	 * Tiny, dependency-free feedback for taps and successes. A real app would

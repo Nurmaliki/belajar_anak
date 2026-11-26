@@ -541,6 +541,27 @@ export class WorldManager {
 				block.castShadow = true;
 				g.add(block);
 			});
+		} else if (id === 'music') {
+			// A xylophone: four bars rising in pitch. The sculpture doubles as a
+			// picture of what the area teaches — low on the left, high on the
+			// right — so a child who cannot read the banner still sees the idea.
+			const barColors = [0xff9a3d, 0xffd34d, 0x4fc26b, 0x4aa8ff];
+			barColors.forEach((hex, i) => {
+				const geo = this.track(new THREE.BoxGeometry(1.5, 0.12, 0.34));
+				const bar = new THREE.Mesh(geo, this.mat(hex, { flat: false }));
+				bar.position.set(0, i * 0.17, (i - 1.5) * 0.34);
+				bar.castShadow = true;
+				g.add(bar);
+			});
+			// The two rails the bars rest on, so it reads as an instrument.
+			const railMat = this.mat(COLORS.fenceDark);
+			for (const side of [-1, 1]) {
+				const railGeo = this.track(new THREE.BoxGeometry(0.1, 0.1, 1.6));
+				const rail = new THREE.Mesh(railGeo, railMat);
+				rail.position.set(side * 0.72, -0.12, 0);
+				rail.castShadow = true;
+				g.add(rail);
+			}
 		} else {
 			// Animal forest: a big friendly elephant silhouette in blocks.
 			const bodyMat = this.mat(0x4ed18a, { flat: false });

@@ -39,7 +39,10 @@ const shot = (step) => page.screenshot({ path: `${ARTIFACTS}/${step}.png` });
 console.log('=== UAT 1 — Boot & menu ===');
 await gotoKids();
 log((await page.locator('canvas.world').count()) === 1, '1.1 kanvas 3D ter-mount');
-log((await page.locator('.area').count()) === 5, '1.1 menu lima area tampil');
+// Read the count instead of hard-coding it: the island gained a sixth area
+// (Pulau Musik), and a literal 5 turned a correct addition into a red test.
+const menuAreas = await page.locator('.area').count();
+log(menuAreas === 6, '1.1 menu semua area tampil', `${menuAreas} area`);
 log((await page.screenshot()).length > 20000, '1.2 menu merender (bukan hitam)');
 await shot('1-boot-menu');
 
@@ -156,6 +159,73 @@ log(success((await state()).phase), '9.2 jawaban benar menang');
 await shot('9-letter');
 await page.waitForTimeout(2600);
 
+console.log('=== UAT 9b — Tebak suara hewan ===');
+await page.evaluate(() => window.__duniaEngine.startMissionForTest('sound-kucing'));
+await page.waitForTimeout(1200);
+log((await page.locator('.speaker').count()) === 1, '9b.1 tombol speaker tampil');
+log((await page.locator('.prompt-icon').count()) === 0, '9b.1 tanpa gambar hewan (akan menjawab pertanyaan)');
+let sndSt = await state();
+log(sndSt.soundHeard === false, '9b.2 suara belum terdengar');
+// Tap the speaker like a child would: that is a real gesture, so it unlocks audio.
+await page.locator('.speaker').click({ force: true });
+let heard9b = false;
+for (let i = 0; i < 24 && !heard9b; i++) {
+	await page.waitForTimeout(250);
+	heard9b = (await state()).soundHeard === true;
+}
+log(heard9b, '9b.3 suara berbunyi, tombol terbuka');
+log((await page.locator('.answers button[disabled]').count()) === 0, '9b.3 semua jawaban aktif');
+await page.evaluate(() => window.__duniaEngine.answerForTest('Sapi'));
+await page.waitForTimeout(1100);
+log((await state()).phase === 'MISSION_ACTIVE', '9b.4 hewan salah: tetap dalam misi');
+await page.evaluate(() => window.__duniaEngine.answerForTest('Kucing'));
+await page.waitForTimeout(900);
+log(success((await state()).phase), '9b.5 hewan benar menang');
+await shot('9b-sound');
+await page.waitForTimeout(2600);
+
+console.log('=== UAT 9c — Pola warna ===');
+await page.evaluate(() => window.__duniaEngine.startMissionForTest('pattern-merah-kuning'));
+await page.waitForTimeout(1600);
+log((await page.locator('.pattern .swatch:not(.swatch--gap)').count()) === 5, '9c.1 lima warna tampil');
+log((await page.locator('.pattern .swatch--gap').count()) === 1, '9c.1 satu slot kosong');
+await page.evaluate(() => window.__duniaEngine.answerForTest('Merah'));
+await page.waitForTimeout(1100);
+log((await state()).phase === 'MISSION_ACTIVE', '9c.2 warna salah: retry');
+await page.evaluate(() => window.__duniaEngine.answerForTest('Kuning'));
+await page.waitForTimeout(900);
+log(success((await state()).phase), '9c.3 warna benar menang');
+await shot('9c-pattern');
+await page.waitForTimeout(2600);
+
+console.log('=== UAT 9d — Pulau Musik: nada tinggi vs rendah ===');
+await page.evaluate(() => window.__duniaEngine.startMissionForTest('pitch-tinggi'));
+await page.waitForTimeout(1200);
+log((await page.locator('.pitch-dots .pitch-dot').count()) === 2, '9d.2 dua penanda nada');
+log((await page.locator('.answers button[disabled]').count()) === 2, '9d.3 jawaban terkunci sebelum dua nada');
+let both9d = false;
+for (let i = 0; i < 12 && !both9d; i++) {
+	await page.waitForTimeout(250);
+	both9d = (await state()).pitchHeard === 2;
+}
+if (!both9d) {
+	await page.locator('.speaker').click({ force: true });
+	for (let i = 0; i < 20 && !both9d; i++) {
+		await page.waitForTimeout(250);
+		both9d = (await state()).pitchHeard === 2;
+	}
+}
+log(both9d, '9d.2 kedua nada berbunyi');
+log((await page.locator('.answers button[disabled]').count()) === 0, '9d.3 jawaban terbuka setelah dua nada');
+await page.evaluate(() => window.__duniaEngine.answerForTest('Rendah'));
+await page.waitForTimeout(1100);
+log((await state()).phase === 'MISSION_ACTIVE', '9d.4 nada salah: retry tanpa hukuman');
+await page.evaluate(() => window.__duniaEngine.answerForTest('Tinggi'));
+await page.waitForTimeout(900);
+log(success((await state()).phase), '9d.5 nada benar menang');
+await shot('9d-pitch');
+await page.waitForTimeout(2600);
+
 console.log('=== UAT 10 — Bimo, pemandu ramah ===');
 await page.waitForTimeout(600);
 const b0 = await state();
@@ -212,12 +282,28 @@ else {
 	log(!/Kunci Orang Tua/.test(body), '12.1 kunci terbuka dengan jawaban benar');
 	log(/[1-9]/.test(await page.locator('.tile', { hasText: 'Bintang' }).first().innerText()), '12.2 bintang tampil');
 	log(/count-apples-3/.test(await page.locator('.tile', { hasText: 'Misi selesai' }).first().innerText()), '12.2 misi selesai tampil');
-	log((await page.locator('.area').count()) === 5, '12.3 satu baris per area', `${await page.locator('.area').count()} baris`);
+	log((await page.locator('.area').count()) === menuAreas, '12.3 satu baris per area', `${await page.locator('.area').count()} baris vs ${menuAreas} area`);
 	const counting = Number(await page.locator('.area[data-area="counting"] .area-bar').getAttribute('aria-valuenow'));
 	log(counting > 0 && counting < 100, '12.3 progres area dalam persen', `${counting}%`);
 	log((await page.locator('.recommend').count()) === 1, '12.4 rekomendasi "Coba berikutnya" tampil');
 	const voice = await page.locator('[data-testid="voice-status"]').innerText();
 	log(voice.trim().length >	0, '12.5 status suara perangkat ditampilkan', voice.replace(/\s+/g, ' '));
+
+	// The mastery panel reads the per-mission performance record that had been
+	// collected since schema v3 and never shown.
+	const mastery = await page.locator('.mastery').innerText();
+	log(/Dikuasai/.test(mastery), '12.6 panel Penguasaan tampil');
+	log(/Sedang dilatih/.test(mastery), '12.6 angka Sedang dilatih tampil');
+	const stats = await page.locator('.mastery .stat-value').allInnerTexts();
+	log(stats.length === 4, '12.6 empat angka penguasaan', stats.join(' | '));
+	// A rate of nothing is "—", never 0%: a child who has not started is not failing.
+	const rate = stats[3] ?? '';
+	log(rate === '—' || /^\d+%$/.test(rate), '12.7 benar sekali coba berupa angka atau —', rate);
+	const notes = await page.locator('.mastery .note').innerText();
+	log(/tidak menampilkan grafik/i.test(notes), '12.11 halaman menyatakan tidak ada grafik waktu');
+	log((await page.locator('.ideas').count()) === 1, '12.10 ide bermain tanpa layar tampil');
+	const ideaText = await page.locator('.ideas').innerText();
+	log(ideaText.trim().length > 40, '12.10 ide punya isi nyata');
 	await shot('12-dashboard');
 }
 

@@ -24,7 +24,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ✅ `MissionManager` + `StateManager` FSM.
 - ✅ Star rewards + celebration.
 - ✅ HUD: mission title, stars, replay, help, exit.
-- ✅ Missions for all five areas, each with a rotation that advances as the
+- ✅ Missions for all six areas, each with a rotation that advances as the
   child completes them — **within** the session, not only after a reload.
   `GameEngine.markMissionComplete` updates the engine's own completed list the
   moment a star is awarded; before that the list was a constructor snapshot, so
@@ -99,6 +99,31 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   that area. Derived from `completedMissions` rather than stored, so it cannot
   drift away from the star total.
 
+- ✅ Sound recognition: identify an animal by its cry alone (`pick-by-sound`).
+  The answer buttons stay locked until the cry has actually played, so a child
+  tapping into silence is asked again rather than marked wrong — the panel
+  never scores a question that was not asked. No prompt picture is drawn,
+  because one would answer the question by sight.
+- ✅ Colour patterns: continue a repeating cycle (`continue-pattern`). The
+  distractor is drawn from inside the cycle, so the answer cannot be found by
+  elimination. This is the pre-mathematics skill the colours area was missing.
+- ✅ **Pulau Musik**, the sixth area (`compare-pitch`). Two tones are played,
+  low then high, and the child says which was higher. Both are synthesised at
+  the frequency the question is about (`AudioManager.playNote`), not spoken:
+  a pitch cannot be asked about with a voice. Both tones must play before any
+  answer counts, for the same reason a comparison needs two things to compare.
+- ✅ `teaches` was empty on the animal, shape and colour missions, so the
+  dashboard never showed what those areas taught. Fixed at the source, with a
+  test that fails if any mission ever reports teaching nothing.
+- ✅ The dashboard now shows **mastery** (mastered / practising / untouched /
+  first-try rate) from the per-mission performance record that had been
+  collected since schema v3 and never displayed, plus practice suggestions and
+  screen-free activity ideas matched to the areas the child has actually played.
+  It deliberately does **not** chart progress over time: no per-mission
+  timestamps are stored, so such a chart would be invented. The dashboard says
+  so rather than leaving a parent to assume the silence is an oversight.
+
+
 ## Phase 5 — Polish 🟡
 
 - ⬜ Supply a licensed `Bubu.glb`, then build and test its `AnimationMixer`
@@ -114,7 +139,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   `AudioManager` plays the bundled file and falls back to `speechSynthesis` for
   any line without one. A licensed studio recording could still replace the
   neural voice later by re-running the generator.
-- ✅ Playwright end-to-end suite (`scripts/kids-smoke.mjs`, 133 checks).
+- ✅ Playwright end-to-end suite (`scripts/kids-smoke.mjs`).
 - ✅ Orientation hint on portrait phones (a dismissible nudge, never a blocker).
 - ✅ Vercel deployment notes (`docs/DEPLOY.md`), verified against a production
   build: SSR returns 200 for `/` and `/parent`, 404 for unknown paths, and the
@@ -171,7 +196,7 @@ A second audit found two more, both now fixed:
   per browser session instead of on every page load.
 - Colour missions use a CSS swatch for the prompt; there is no 3D colour
   object in the world for them.
-- All five areas are open from the start. Locking content behind progress was
+- All six areas are open from the start. Locking content behind progress was
   rejected for this age group: a wall in front of a three-year-old produces
   tears, not motivation. `unlockedAreas()` records visits for the dashboard.
 - The portrait hint only advises; the game is fully playable in portrait. Forcing
@@ -188,3 +213,11 @@ A second audit found two more, both now fixed:
   `engine/AccessoryRenderer.ts`, not loaded from model files. They are parented
   to Bubu's named rig groups, so they ride along with her head and body —
   swapping disposes the old geometry rather than leaving it in the scene graph.
+- Musical pitch is asked with two synthesised oscillator tones, not recorded
+  instruments. They are accurate and always available offline, but they are not
+  a piano. Swapping in samples would mean adding audio files, not changing the
+  session rules.
+- Progress has no timestamps per mission — only `lastPlayedAt` for the whole
+  save. The dashboard therefore reports mastery and difficulty but **not** a
+  trend over time, and says so on the page. Adding it would need a schema
+  version 5 recording `completedAt`, and old saves could not be backfilled.

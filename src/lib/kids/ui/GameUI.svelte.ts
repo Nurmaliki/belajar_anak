@@ -45,6 +45,22 @@ export interface MissionPanelView {
 	sorted?: number[];
 	/** The groups to subtract, for `subtract-groups` missions. */
 	subtract?: { start: number; removed: number };
+	/**
+	 * Whether the animal's cry has played, for `pick-by-sound` missions.
+	 *
+	 * The panel uses this to keep the answer buttons disabled and to show
+	 * "listen again" instead: a child who has heard nothing is not being
+	 * tested, and a button that scores them would be a trap.
+	 */
+	soundHeard?: boolean;
+	/** The repeating rule, for `continue-pattern` missions, e.g. ['Merah','Kuning']. */
+	cycle?: string[];
+	/** The items already shown before the gap, for `continue-pattern` missions. */
+	shown?: string[];
+	/** How many of two tones have played, for `compare-pitch` missions. */
+	pitchHeard?: number;
+	/** True once both tones played, so the buttons are live. */
+	pitchReady?: boolean;
 }
 
 export class GameUI {
@@ -145,7 +161,10 @@ export class GameUI {
 	}
 
 	replayInstruction(): void {
-		this.engine?.replayInstruction();
+		// A sound mission's "listen again" must replay the *cry*, not the
+		// instruction. Routing it through the engine keeps the decision where
+		// the mission is known, rather than making the UI branch on kind.
+		this.engine?.replayCry();
 	}
 
 	/** Put an accessory on Bubu, or take it off with `'none'`. */

@@ -17,6 +17,9 @@ import { BuildSession } from '../activities/syllables/BuildSession';
 import { AdditionSession } from '../activities/addition/AdditionSession';
 import { CompareSession } from '../activities/compare/CompareSession';
 import { SortSession } from '../activities/sorting/SortSession';
+import { SoundSession } from '../activities/sounds/SoundSession';
+import { PatternSession } from '../activities/patterns/PatternSession';
+import { PitchSession } from '../activities/music/PitchSession';
 import { SubtractionSession } from '../activities/subtraction/SubtractionSession';
 import { BimoController } from './BimoController';
 import { attachAccessory, type AttachedAccessory } from './AccessoryRenderer';
@@ -127,6 +130,12 @@ export class GameEngine {
 	/** Current comparison session, for `compare-groups` missions. */
 	private compareSession: CompareSession | null = null;
 	private sortSession: SortSession | null = null;
+	/** Active sound-recognition session (`pick-by-sound`), if any. */
+	private soundSession: SoundSession | null = null;
+	/** Active colour-pattern session (`continue-pattern`), if any. */
+	private patternSession: PatternSession | null = null;
+	/** Active pitch-comparison session (`compare-pitch`), if any. */
+	private pitchSession: PitchSession | null = null;
 	private subtractSession: SubtractionSession | null = null;
 	private activeMission: MissionDefinition | null = null;
 	/** Id of the area whose mission was last started, to avoid re-triggering. */
@@ -256,6 +265,9 @@ export class GameEngine {
 					this.compareSession?.canAnswer() ??
 					this.sortSession?.canAnswer() ??
 					this.subtractSession?.canAnswer() ??
+					this.soundSession?.canAnswer() ??
+					this.patternSession?.canAnswer() ??
+					this.pitchSession?.canAnswer() ??
 					null,
 				mission: this.activeMission?.id ?? null,
 				missionKind: this.activeMission?.kind ?? null,
@@ -269,6 +281,11 @@ export class GameEngine {
 				sortStep: this.sortSession?.currentStep ?? null,
 				sortPlaced: this.sortSession?.placed.length ?? null,
 				subtractStep: this.subtractSession?.currentStep ?? null,
+				soundStep: this.soundSession?.currentStep ?? null,
+				soundHeard: this.soundSession?.soundWasHeard ?? null,
+				patternStep: this.patternSession?.currentStep ?? null,
+				pitchStep: this.pitchSession?.currentStep ?? null,
+				pitchHeard: this.pitchSession?.soundsHeard ?? null,
 				bimoState: this.bimo.currentState,
 				bimoHopping: this.bimo.isHopping,
 				bimoYaw: this.bimo.root.rotation.y,
@@ -612,6 +629,14 @@ export class GameEngine {
 
 		this.audio.speak(mission.instruction);
 		this.playAnimalSoundAfterwards(mission);
+		this.playMissionCry(mission);
+		if (mission.kind === 'compare-pitch') {
+			// Give the instruction a beat to finish, then play the notes.
+			this.later(() => {
+				if (this.disposed || this.activeMission?.id !== mission.id) return;
+				this.playPitchPair();
+			}, 2600);
+		}
 		this.pushMissionView();
 
 		// After the intro line, move to active so the apples are live.
@@ -641,6 +666,9 @@ export class GameEngine {
 		this.compareSession = null;
 		this.sortSession = null;
 		this.subtractSession = null;
+		this.soundSession = null;
+		this.patternSession = null;
+		this.pitchSession = null;
 
 		if (mission.kind === 'count-and-answer') {
 			this.session = new CountSession({
@@ -691,6 +719,36 @@ export class GameEngine {
 			return [];
 		}
 
+		if (mission.kind === 'compare-pitch') {
+			this.pitchSession = new PitchSession({
+				answer: (mission.targetAnswer ?? 'Tinggi').toLowerCase() as 'tinggi' | 'rendah',
+				choices: mission.choices
+			});
+			// Both tones are played by `beginMission`; `markSoundHeard` is called
+			// once per tone, which is what unlocks the buttons.
+			return [];
+		}
+
+		if (mission.kind === 'continue-pattern') {
+			this.patternSession = new PatternSession({
+				cycle: mission.cycle ?? ['Merah', 'Kuning'],
+				visible: mission.visible,
+				choices: mission.choices
+			});
+			return [];
+		}
+
+		if (mission.kind === 'pick-by-sound') {
+			this.soundSession = new SoundSession({
+				answer: mission.targetAnswer ?? mission.choices[0],
+				choices: mission.choices
+			});
+			// The sound is played by `beginMission` right after this returns, and
+			// `markSoundHeard` is called then. Until it is, the buttons refuse,
+			// so a child cannot answer a question they were never asked.
+			return [];
+		}
+
 		if (mission.kind === 'assemble-word') {
 			this.buildSession = new BuildSession({
 				answer: mission.answerSyllables ?? [mission.choices[0], mission.choices[1]],
@@ -707,6 +765,18 @@ export class GameEngine {
 	}
 
 	submitAnswer(value: string): void {
+		if (this.soundSession) {
+			this.submitSoundAnswer(value);
+			return;
+		}
+		if (this.patternSession) {
+			this.submitPatternAnswer(value);
+			return;
+		}
+		if (this.pitchSession) {
+			this.submitPitchAnswer(value);
+			return;
+		}
 		if (this.subtractSession) {
 			this.submitSubtractionAnswer(value);
 			return;
@@ -748,6 +818,86 @@ export class GameEngine {
 			// Let the shake finish, then re-enable the buttons.
 			this.later(() => {
 				this.session?.acknowledgeWrong();
+				this.pushMissionView();
+			}, 900);
+			return;
+		}
+		this.rewardSuccess();
+	}
+
+	/** Answer "which of the two tones was higher/lower?". */
+	private submitPitchAnswer(value: string): void {
+		if (!this.pitchSession) return;
+		this.selectedChoice = value;
+		const result = this.pitchSession.answer(value);
+
+		if (result.refused) {
+			// Tapped before both tones played: the question has not been asked
+			// yet, so replay it rather than blame the child.
+			if (!this.pitchSession.fullyHeard) this.playPitchPair();
+			return;
+		}
+
+		if (!result.correct) {
+			this.wrongChoices = [...this.pitchSession.wrongChoices];
+			this.recordWrongAnswer();
+			this.audio.playSfx('gentle');
+			this.audio.speak('Belum tepat. Dengarkan nadanya sekali lagi!', { interrupt: true });
+			this.pushMissionView();
+			this.later(() => {
+				this.pitchSession?.acknowledgeWrong();
+				this.pushMissionView();
+			}, 900);
+			return;
+		}
+		this.rewardSuccess();
+	}
+
+	/** Answer a "who makes this sound?" mission. */
+	private submitSoundAnswer(value: string): void {
+		if (!this.soundSession) return;
+		this.selectedChoice = value;
+		const result = this.soundSession.answer(value);
+
+		// Refused, not wrong: tapped before the cry played, a stale button, or
+		// a double tap after success. None of these is the child's mistake, so
+		// none is recorded — the cry is simply offered again.
+		if (result.refused) {
+			if (!this.soundSession.soundWasHeard) this.replayCry();
+			return;
+		}
+
+		if (!result.correct) {
+			this.wrongChoices = [...this.soundSession.wrongChoices];
+			this.recordWrongAnswer();
+			this.audio.playSfx('gentle');
+			this.audio.speak('Belum tepat. Dengarkan lagi, ya!', { interrupt: true });
+			this.pushMissionView();
+			this.later(() => {
+				this.soundSession?.acknowledgeWrong();
+				this.pushMissionView();
+			}, 900);
+			return;
+		}
+		this.rewardSuccess();
+	}
+
+	/** Continue a repeating colour pattern. */
+	private submitPatternAnswer(value: string): void {
+		if (!this.patternSession) return;
+		this.selectedChoice = value;
+		const result = this.patternSession.answer(value);
+
+		if (!result.correct) {
+			// A value never offered, or a pick during the wobble: ignore it.
+			if (this.patternSession.currentStep !== 'answered-wrong') return;
+			this.wrongChoices = this.patternSession.wrongChoices.map(String);
+			this.recordWrongAnswer();
+			this.audio.playSfx('gentle');
+			this.audio.speak('Belum tepat. Lihat polanya sekali lagi!', { interrupt: true });
+			this.pushMissionView();
+			this.later(() => {
+				this.patternSession?.acknowledgeWrong();
 				this.pushMissionView();
 			}, 900);
 			return;
@@ -979,6 +1129,91 @@ export class GameEngine {
 		}, 2600);
 	}
 
+	/**
+	 * Play the cry a `pick-by-sound` mission asks about, then unlock its
+	 * buttons.
+	 *
+	 * Separate from `playAnimalSoundAfterwards` because the timing and the
+	 * consequence differ: that one is decoration after an instruction, this
+	 * one *is* the question. Until it has played, `SoundSession` refuses every
+	 * answer, so the panel cannot score a child who tapped into silence.
+	 *
+	 * If the timer is cancelled (a disposed engine, a new mission) the session
+	 * stays locked and the panel keeps showing "listen again" — the honest
+	 * state, rather than an unlocked question nobody heard.
+	 */
+	private playMissionCry(mission: MissionDefinition): void {
+		if (mission.kind !== 'pick-by-sound') return;
+		const cry = mission.sound;
+		if (!cry) return;
+		this.later(() => {
+			if (this.disposed) return;
+			if (this.activeMission?.id !== mission.id) return;
+			this.audio.speakAnimalSound(cry.cry, cry.depth);
+			this.soundSession?.markSoundHeard();
+			this.pushMissionView();
+		}, 2400);
+	}
+
+	/**
+	 * Play a pitch mission's two tones, low then high, and count each one.
+	 *
+	 * The two are spaced apart rather than played together: a comparison needs
+	 * them in sequence, and a chord would be a different (much harder) question.
+	 * Each tone marks the session, so the buttons unlock exactly when the second
+	 * one has finished — not when the first has.
+	 *
+	 * If the device cannot make sound, nothing is marked: the buttons stay
+	 * locked and the panel keeps offering "listen again", which is the honest
+	 * state for a child who has heard nothing.
+	 */
+	private playPitchPair(): void {
+		const session = this.pitchSession;
+		const pitches = this.activeMission?.pitches;
+		if (!session || !pitches) return;
+
+		// A tone needs an unlocked AudioContext, which browsers only allow after
+		// a gesture. `replayCry` reaches here *from* a gesture, so unlocking is
+		// safe; and without it a child on a fresh page would stare at locked
+		// buttons forever, tapping a speaker that never makes a sound.
+		if (!this.audio.canPlayTones) {
+			this.audio.unlock();
+			if (!this.audio.canPlayTones) return;
+		}
+
+		// The child has not answered yet, so a replay re-arms the count.
+		session.resetHeard();
+		session.acknowledgeWrong();
+		this.pushMissionView();
+
+		this.audio.playNote(pitches.low, 0.8);
+		session.markSoundHeard();
+		this.pushMissionView();
+
+		this.later(() => {
+			if (this.disposed || this.pitchSession !== session) return;
+			this.audio.playNote(pitches.high, 0.8);
+			session.markSoundHeard();
+			this.pushMissionView();
+		}, 900);
+	}
+
+	/** Replay a sound mission's cry on request. Free, unlimited, never scored. */
+	replayCry(): void {
+		if (this.activeMission?.kind === 'compare-pitch' && this.pitchSession) {
+			this.playPitchPair();
+			return;
+		}
+		const cry = this.activeMission?.sound;
+		if (!cry || this.activeMission?.kind !== 'pick-by-sound') {
+			this.replayInstruction();
+			return;
+		}
+		this.audio.speakAnimalSound(cry.cry, cry.depth);
+		this.soundSession?.markSoundHeard();
+		this.pushMissionView();
+	}
+
 	/** Announce an area by name and tagline. */
 	narrateArea(area: AreaId): void {
 		const def = getArea(area);
@@ -997,7 +1232,10 @@ export class GameEngine {
 			this.addSession ||
 			this.compareSession ||
 			this.sortSession ||
-			this.subtractSession
+			this.subtractSession ||
+			this.soundSession ||
+			this.patternSession ||
+			this.pitchSession
 		) {
 			this.session = null;
 			this.choiceSession = null;
@@ -1037,7 +1275,10 @@ export class GameEngine {
 			!this.addSession &&
 			!this.compareSession &&
 			!this.sortSession &&
-			!this.subtractSession
+			!this.subtractSession &&
+			!this.soundSession &&
+			!this.patternSession &&
+			!this.pitchSession
 		)
 			return;
 		if (this.states.current === 'MISSION_SUCCESS') return;
@@ -1061,6 +1302,9 @@ export class GameEngine {
 		this.compareSession = null;
 		this.sortSession = null;
 		this.subtractSession = null;
+		this.soundSession = null;
+		this.patternSession = null;
+		this.pitchSession = null;
 		this.activeMission = null;
 		this.wrongChoices = [];
 		this.selectedChoice = null;
@@ -1085,6 +1329,53 @@ export class GameEngine {
 			return;
 		}
 		const mission = this.activeMission;
+
+		if (this.pitchSession) {
+			const step = this.pitchSession.currentStep;
+			this.ui.setMission({
+				mission,
+				collected: this.pitchSession.soundsHeard,
+				total: 2,
+				canAnswer: this.pitchSession.canAnswer(),
+				selected: this.selectedChoice,
+				feedback: step === 'answered-wrong' ? 'wrong' : step === 'answered-correct' ? 'correct' : null,
+				wrongChoices: this.wrongChoices,
+				pitchHeard: this.pitchSession.soundsHeard,
+				pitchReady: this.pitchSession.fullyHeard
+			});
+			return;
+		}
+
+		if (this.soundSession) {
+			const step = this.soundSession.currentStep;
+			this.ui.setMission({
+				mission,
+				collected: 0,
+				total: 0,
+				canAnswer: this.soundSession.canAnswer(),
+				selected: this.selectedChoice,
+				feedback: step === 'answered-wrong' ? 'wrong' : step === 'answered-correct' ? 'correct' : null,
+				wrongChoices: this.wrongChoices,
+				soundHeard: this.soundSession.soundWasHeard
+			});
+			return;
+		}
+
+		if (this.patternSession) {
+			const step = this.patternSession.currentStep;
+			this.ui.setMission({
+				mission,
+				collected: 0,
+				total: 0,
+				canAnswer: this.patternSession.canAnswer(),
+				selected: this.selectedChoice,
+				feedback: step === 'answered-wrong' ? 'wrong' : step === 'answered-correct' ? 'correct' : null,
+				wrongChoices: this.wrongChoices,
+				cycle: [...this.patternSession.cycle],
+				shown: [...this.patternSession.shown]
+			});
+			return;
+		}
 
 		if (this.subtractSession) {
 			const step = this.subtractSession.currentStep;
@@ -1260,7 +1551,10 @@ export class GameEngine {
 			this.addSession ||
 			this.compareSession ||
 			this.sortSession ||
-			this.subtractSession
+			this.subtractSession ||
+			this.soundSession ||
+			this.patternSession ||
+			this.pitchSession
 		)
 			return; // already in a mission
 		const area = this.world.nearestArea(this.bubu.position, AREA_TRIGGER_RADIUS);

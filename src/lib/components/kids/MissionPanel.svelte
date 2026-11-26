@@ -31,6 +31,9 @@
 	const isSubtracting = $derived(view.mission.kind === 'subtract-groups');
 	const isComparing = $derived(view.mission.kind === 'compare-groups');
 	const isSorting = $derived(view.mission.kind === 'sort-groups');
+	const isBySound = $derived(view.mission.kind === 'pick-by-sound');
+	const isPattern = $derived(view.mission.kind === 'continue-pattern');
+	const isPitch = $derived(view.mission.kind === 'compare-pitch');
 	const dots = $derived(Array.from({ length: view.total }, (_, i) => i < view.collected));
 	const showAnswers = $derived(!isCounting || view.canAnswer || view.feedback !== null);
 	const progressPct = $derived(Math.round((view.collected / Math.max(1, view.total)) * 100));
@@ -69,6 +72,22 @@
 		if (isCounting) return `${choice}, ${numberWord(Number(choice))}`;
 		return choice;
 	}
+
+	/**
+	 * The CSS colour behind a colour name, for pattern swatches.
+	 *
+	 * Looks the name up in the same catalogue the missions were built from, so a
+	 * renamed colour shows up as the right swatch rather than a mystery blob.
+	 * An unknown name renders neutral grey instead of throwing, because a
+	 * washed-out swatch is a cosmetic bug and a crash is not.
+	 */
+	function swatch(name: string): string {
+		const entry = COLORS.find((c) => c.name === name);
+		return entry ? `#${entry.hex.toString(16).padStart(6, '0')}` : '#c9c2d4';
+	}
+
+	/** The items a pattern shows, then one empty slot where the answer goes. */
+	const patternShown = $derived(view.shown ?? []);
 </script>
 
 <div class="mission">
@@ -114,6 +133,113 @@
 					{/each}
 				</div>
 			{/if}
+		{:else if isBySound}
+			<!--
+				A question asked by ear: one big speaker, no picture. The buttons
+				stay disabled until the cry has actually played, so a child who
+				tapped into silence is asked again rather than marked wrong.
+				Showing the animal here would be the one thing that ruins it.
+			-->
+			<button
+				class="speaker"
+				class:heard={view.soundHeard}
+				onclick={onreplay}
+				aria-label="Dengarkan suara hewan lagi"
+			>
+				<span class="speaker-icon" aria-hidden="true">{view.soundHeard ? '🔊' : '👂'}</span>
+				<span class="speaker-text">
+					{view.soundHeard ? 'Dengarkan lagi' : 'Dengarkan suaranya…'}
+				</span>
+			</button>
+			<div class="answers answers--words" role="group" aria-label="Pilih hewan yang bersuara">
+				{#each view.mission.choices as choice, k (choice)}
+					{@const isWrong = view.wrongChoices.includes(choice)}
+					<button
+						class="answer answer--word"
+						class:chosen={view.selected === choice && view.feedback === 'correct'}
+						class:rejected={isWrong && view.feedback !== 'correct'}
+						disabled={!view.soundHeard || view.feedback === 'correct'}
+						onclick={() => onanswer(choice)}
+						aria-label={choice}
+						style="--i:{k}"
+					>
+						<span class="word">{choice}</span>
+					</button>
+				{/each}
+			</div>
+		{:else if isPattern}
+			<!--
+				A repeating sequence with one slot left blank. The swatches use the
+				same colours as the answer buttons, so the rule is visible without
+				any reading: red, yellow, red, yellow, red, ?
+			-->
+			<div class="pattern" role="img" aria-label="Pola warna, satu warna belum terisi">
+				{#each patternShown as name, i (i)}
+					<span class="swatch" style="--sw:{swatch(name)}" aria-hidden="true"></span>
+				{/each}
+				<span class="swatch swatch--gap" aria-hidden="true">?</span>
+			</div>
+			<div class="answers answers--words" role="group" aria-label="Pilih warna berikutnya">
+				{#each view.mission.choices as choice, k (choice)}
+					{@const isWrong = view.wrongChoices.includes(choice)}
+					<button
+						class="answer answer--word answer--swatch"
+						class:chosen={view.selected === choice && view.feedback === 'correct'}
+						class:rejected={isWrong && view.feedback !== 'correct'}
+						disabled={view.feedback === 'correct'}
+						onclick={() => onanswer(choice)}
+						aria-label={choice}
+						style="--i:{k};--sw:{swatch(choice)}"
+					>
+						<span class="chip" aria-hidden="true"></span>
+						<span class="word">{choice}</span>
+					</button>
+				{/each}
+			</div>
+		{:else if isPitch}
+			<!--
+				Two tones, one question. The buttons stay locked until *both*
+				notes have played — a comparison needs two things to compare,
+				and a child who heard one note has not been asked anything.
+				The panel shows how many are done so the wait is visible.
+			-->
+			<button
+				class="speaker"
+				class:heard={view.pitchReady}
+				onclick={onreplay}
+				aria-label="Dengarkan dua nada lagi"
+			>
+				<span class="speaker-icon" aria-hidden="true">{view.pitchReady ? '🎵' : '👂'}</span>
+				<span class="speaker-text">
+					{view.pitchReady ? 'Dengarkan lagi' : 'Dengarkan nadanya…'}
+				</span>
+			</button>
+			<div class="pitch-dots" role="img" aria-label="{view.pitchHeard ?? 0} dari 2 nada sudah dimainkan">
+				{#each [0, 1] as i (i)}
+					<span
+						class="pitch-dot"
+						class:played={(view.pitchHeard ?? 0) > i}
+						style="--h:{i === 0 ? 0.45 : 1}"
+						aria-hidden="true"
+					></span>
+				{/each}
+			</div>
+			<div class="answers answers--words" role="group" aria-label="Pilih nada yang lebih tinggi atau rendah">
+				{#each view.mission.choices as choice, k (choice)}
+					{@const isWrong = view.wrongChoices.includes(choice)}
+					<button
+						class="answer answer--word"
+						class:chosen={view.selected === choice && view.feedback === 'correct'}
+						class:rejected={isWrong && view.feedback !== 'correct'}
+						disabled={!view.pitchReady || view.feedback === 'correct'}
+						onclick={() => onanswer(choice)}
+						aria-label={choice}
+						style="--i:{k}"
+					>
+						<span class="word">{choice}</span>
+					</button>
+				{/each}
+			</div>
 		{:else if isComparing}
 			<!-- Two groups, both tappable. The child answers by pointing at
 			     objects, so no number reading is required. -->
@@ -723,6 +849,115 @@
 			inset 0 -6px 0 rgba(0, 0, 0, 0.12),
 			var(--dp-shadow-sm);
 	}
+	/* A question asked by ear: the speaker *is* the prompt, so it is a real
+	   button (min 64px tall) rather than decoration. It pulses until heard,
+	   because a silent child needs to know where to tap. */
+	.speaker {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.6rem;
+		min-height: var(--dp-target);
+		padding: 0.7rem 1.2rem;
+		border-radius: var(--dp-radius);
+		background: linear-gradient(180deg, #eaf6ff, #d5ecff);
+		border: 3px solid #a7d5ff;
+		font-size: clamp(1rem, 3.4vw, 1.25rem);
+		font-weight: 800;
+		color: var(--dp-ink-soft);
+	}
+	.speaker.heard {
+		background: linear-gradient(180deg, #effff3, #d8f7e2);
+		border-color: #9fe0b4;
+	}
+	.speaker-icon {
+		font-size: 1.6em;
+		line-height: 1;
+	}
+	/* Only the unheard state animates: once heard, the prompt has done its job
+	   and motion would compete with the answer buttons. */
+	.speaker:not(.heard) .speaker-icon {
+		animation: nudge 1.6s ease-in-out infinite;
+	}
+	@keyframes nudge {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.16);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.speaker:not(.heard) .speaker-icon {
+			animation: none;
+		}
+	}
+
+	/* One dot per tone, at the height of the note it stands for: the waiting
+	   state doubles as a picture of "low, then high". */
+	.pitch-dots {
+		display: flex;
+		justify-content: center;
+		align-items: flex-end;
+		gap: 0.7rem;
+		height: 2.2rem;
+	}
+	.pitch-dot {
+		width: 1.1rem;
+		height: calc(1.1rem + var(--h) * 0.9rem);
+		border-radius: 999px;
+		background: #d8d0dd;
+		transition: background 200ms ease;
+	}
+	.pitch-dot.played {
+		background: var(--dp-purple);
+	}
+
+	/* A pattern: coloured chips in a row, then one question-mark slot. */
+	.pattern {
+		display: flex;
+		flex-wrap: wrap;
+		gap: clamp(0.2rem, 1.2vw, 0.4rem);
+		justify-content: center;
+		align-items: center;
+		padding: 0.5rem 0.6rem;
+		border-radius: var(--dp-radius-sm);
+		background: #fff2d6;
+		border: 3px dashed #e8c98a;
+	}
+	.swatch {
+		width: clamp(1.7rem, 6vw, 2.4rem);
+		height: clamp(1.7rem, 6vw, 2.4rem);
+		border-radius: 50%;
+		background: var(--sw);
+		box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.16);
+	}
+	.swatch--gap {
+		background: #fffaf2;
+		border: 3px dashed #c9b79a;
+		box-shadow: none;
+		display: grid;
+		place-items: center;
+		font-size: clamp(1rem, 3.6vw, 1.4rem);
+		font-weight: 900;
+		color: #b8a488;
+	}
+	/* A swatch button carries the colour it names, so the child matches by
+	   sight. The name stays as the accessible label, not printed content. */
+	.answer--swatch {
+		flex-direction: row;
+		gap: 0.5rem;
+	}
+	.answer--swatch .chip {
+		width: 1.5em;
+		height: 1.5em;
+		border-radius: 50%;
+		background: var(--sw);
+		box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+		flex: 0 0 auto;
+	}
+
 	.answers {
 		display: flex;
 		flex-wrap: wrap;

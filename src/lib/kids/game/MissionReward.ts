@@ -40,6 +40,18 @@ export function applyMissionResult(progress: ChildProgress, mission: MissionDefi
 		for (const s of teaches.syllables ?? []) {
 			next = ProgressRepository.correctSyllable(next, s);
 		}
+		for (const a of teaches.animals ?? []) {
+			next = ProgressRepository.correctAnimal(next, a);
+		}
+		for (const s of teaches.shapes ?? []) {
+			next = ProgressRepository.correctShape(next, s);
+		}
+		for (const c of teaches.colors ?? []) {
+			next = ProgressRepository.correctColor(next, c);
+		}
+		for (const m of teaches.music ?? []) {
+			next = ProgressRepository.correctMusic(next, m);
+		}
 	}
 	return next;
 }
@@ -75,6 +87,10 @@ export function applyMissionIntroduced(
 		for (const s of teaches.syllables ?? []) {
 			next = ProgressRepository.introduceSyllable(next, s);
 		}
+		for (const a of teaches.animals ?? []) next = ProgressRepository.introduceAnimal(next, a);
+		for (const s of teaches.shapes ?? []) next = ProgressRepository.introduceShape(next, s);
+		for (const c of teaches.colors ?? []) next = ProgressRepository.introduceColor(next, c);
+		for (const m of teaches.music ?? []) next = ProgressRepository.introduceMusic(next, m);
 	}
 	return next;
 }

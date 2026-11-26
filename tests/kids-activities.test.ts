@@ -347,6 +347,49 @@ function checkMissionIsAnswerable(mission: MissionDefinition): void {
 			expect(mission.targetAnswer, `${id} has no targetAnswer`).toBeTruthy();
 			expect(mission.choices, `${id} omits its answer`).toContain(mission.targetAnswer);
 			return;
+		case 'pick-by-sound': {
+			// A sound question shows no picture, so its answer has to be
+			// reachable some other way: the cry it plays.
+			expect(mission.targetAnswer, `${id} has no targetAnswer`).toBeTruthy();
+			expect(mission.choices, `${id} omits its answer`).toContain(mission.targetAnswer);
+			expect(mission.sound?.cry, `${id} has no cry to play`).toBeTruthy();
+			expect(typeof mission.sound?.depth, `${id} has no voice depth`).toBe('number');
+			// A picture would answer the question for the child, so there must
+			// not be one.
+			expect(mission.prompt?.icon ?? '', `${id} shows the animal it asks about`).toBe('');
+			return;
+		}
+		case 'compare-pitch': {
+			// A pitch question plays two tones; both frequencies must exist and
+			// the high one must genuinely be above the low one, or the
+			// comparison has no answer.
+			const pitches = mission.pitches;
+			expect(pitches, `${id} has no tones`).toBeTruthy();
+			expect(pitches!.high, `${id} is not higher than its low tone`).toBeGreaterThan(pitches!.low);
+			expect(pitches!.low, `${id} has a non-positive frequency`).toBeGreaterThan(0);
+			// Both labels are offered, and the answer is one of them.
+			expect(mission.choices.map((c) => c.toLowerCase()).sort()).toEqual(['rendah', 'tinggi']);
+			expect(mission.targetAnswer, `${id} has no targetAnswer`).toBeTruthy();
+			expect(
+				mission.choices.map((c) => c.toLowerCase()),
+				`${id} omits its answer`
+			).toContain((mission.targetAnswer ?? '').toLowerCase());
+			// No picture: drawing an animal would answer the question by sight.
+			expect(mission.prompt?.icon ?? '', `${id} shows a picture instead of asking by ear`).toBe('');
+			return;
+		}
+		case 'continue-pattern': {
+			const cycle = mission.cycle ?? [];
+			expect(cycle.length, `${id} has no pattern`).toBeGreaterThanOrEqual(2);
+			// The cycle must be a real cycle: no item twice inside one turn.
+			expect(new Set(cycle).size, `${id} repeats inside a cycle`).toBe(cycle.length);
+			const visible = mission.visible ?? 5;
+			expect(visible, `${id} shows nothing`).toBeGreaterThanOrEqual(cycle.length);
+			const expected = cycle[visible % cycle.length];
+			expect(mission.targetAnswer, `${id} predicts the wrong next item`).toBe(expected);
+			expect(mission.choices, `${id} omits its answer`).toContain(expected);
+			return;
+		}
 		default: {
 			// If this line fails to compile, a mission kind was added without a
 			// rule here. Add a case rather than widening the type.

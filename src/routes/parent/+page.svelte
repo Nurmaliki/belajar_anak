@@ -5,6 +5,11 @@
 	import type { ChildProgress } from '#lib/kids/game/ProgressTypes';
 	import { numberWord } from '#lib/kids/data/numbers';
 	import { areaStatus, nextRecommendation, summarizeAreas } from '#lib/kids/game/AreaSummary';
+	import {
+		learningSnapshot,
+		practiceSuggestions,
+		offlineIdeas
+	} from '#lib/kids/game/ProgressInsights';
 	import { resolveWearing } from '#lib/kids/data/accessories';
 	import { AudioManager } from '#lib/kids/engine/AudioManager';
 
@@ -100,9 +105,28 @@
 	const learnLetters = $derived(progress?.learningProgress.introducedLetters ?? []);
 	const correctLetters = $derived(progress?.learningProgress.correctLetters ?? []);
 	const syllables = $derived(progress?.learningProgress.introducedSyllables ?? []);
+	const correctSyllables = $derived(progress?.learningProgress.correctSyllables ?? []);
+	// The animals / shapes / colours lists exist because the missions used to
+	// report `teaches: {}` — see the v4 migration. Reading them here is what
+	// makes the fix visible to a parent; without this the data was recorded
+	// and never shown.
+	const animalsSeen = $derived(progress?.learningProgress.introducedAnimals ?? []);
+	const animalsKnown = $derived(progress?.learningProgress.correctAnimals ?? []);
+	const shapesSeen = $derived(progress?.learningProgress.introducedShapes ?? []);
+	const shapesKnown = $derived(progress?.learningProgress.correctShapes ?? []);
+	const colorsSeen = $derived(progress?.learningProgress.introducedColors ?? []);
+	const colorsKnown = $derived(progress?.learningProgress.correctColors ?? []);
+	const musicSeen = $derived(progress?.learningProgress.introducedMusic ?? []);
+	const musicKnown = $derived(progress?.learningProgress.correctMusic ?? []);
 	const minutes = $derived(Math.round((progress?.totalPlayTimeSeconds ?? 0) / 60));
 	/** Per-area breakdown, derived from the completed missions. */
 	const areas = $derived(progress ? summarizeAreas(progress) : []);
+	/** What the record can honestly say about mastery, difficulty and coverage. */
+	const snapshot = $derived(progress ? learningSnapshot(progress) : null);
+	/** Missions still costing mistakes, hardest first — real practice, not a guess. */
+	const practice = $derived(progress ? practiceSuggestions(progress) : []);
+	/** Screen-free activities matched to what this child has played. */
+	const ideas = $derived(progress ? offlineIdeas(progress) : []);
 	/** What to suggest the child try next, or null when everything is done. */
 	const next = $derived((progress && areas.length ? nextRecommendation(progress, areas) : null));
 	/** What Bubu has on, as a name a parent can read. */
@@ -181,6 +205,28 @@
 				<p class="small">{fmtList(syllables)}</p>
 			</div>
 			<div class="tile dp-card">
+				<h3>Hewan dikenal</h3>
+				<p class="big">{animalsKnown.length}</p>
+				<p class="small">
+					Dikenalkan {animalsSeen.length}: {fmtList(animalsSeen)}
+				</p>
+			</div>
+			<div class="tile dp-card">
+				<h3>Warna dikenal</h3>
+				<p class="big">{colorsKnown.length}</p>
+				<p class="small">Dikenalkan {colorsSeen.length}: {fmtList(colorsSeen)}</p>
+			</div>
+			<div class="tile dp-card">
+				<h3>Bentuk dikenal</h3>
+				<p class="big">{shapesKnown.length}</p>
+				<p class="small">Dikenalkan {shapesSeen.length}: {fmtList(shapesSeen)}</p>
+			</div>
+			<div class="tile dp-card">
+				<h3>Nada dikenal</h3>
+				<p class="big">{musicKnown.length}</p>
+				<p class="small">Dikenalkan {musicSeen.length}: {fmtList(musicSeen)}</p>
+			</div>
+			<div class="tile dp-card">
 				<h3>Aksesori dipakai</h3>
 				<p class="big">{wornName}</p>
 				<p class="small">Semua aksesori terbuka sejak awal; bintang hanya catatan, bukan syarat.</p>
@@ -232,6 +278,97 @@
 					<span class="next-percent">{next.areaPercent}%</span>
 				</div>
 			</section>
+		{/if}
+
+		{#if snapshot}
+			<section class="mastery dp-card">
+				<h2>Penguasaan</h2>
+				<p class="legend legend--prose">
+					Dihitung dari misi yang sudah diselesaikan. <strong>Dikuasai</strong> berarti selesai tanpa
+					kesalahan yang tersisa; <strong>Sedang dilatih</strong> berarti masih ada kesalahan yang
+					tersimpan. Angka diperbarui perlahan seiring anak berhasil mengulang.
+				</p>
+				<div class="mastery-grid">
+					<div class="stat">
+						<span class="stat-value">{snapshot.mastered}</span>
+						<span class="stat-label">Dikuasai</span>
+					</div>
+					<div class="stat">
+						<span class="stat-value">{snapshot.practising}</span>
+						<span class="stat-label">Sedang dilatih</span>
+					</div>
+					<div class="stat">
+						<span class="stat-value">{snapshot.untouched}</span>
+						<span class="stat-label">Belum dicoba</span>
+					</div>
+					<div class="stat">
+						<span class="stat-value">
+							{snapshot.firstTryRate === null ? '—' : `${snapshot.firstTryRate}%`}
+						</span>
+						<span class="stat-label">Benar sekali coba</span>
+					</div>
+				</div>
+				<p class="hint">
+					{snapshot.areasStarted} dari {snapshot.areasTotal} area sudah dicoba, dan
+					{snapshot.areasFinished} area selesai seluruh misinya.
+					{#if snapshot.firstTryRate === null}
+						Belum ada misi yang selesai, jadi belum ada angka untuk ditampilkan.
+					{/if}
+				</p>
+				<!--
+					Deliberately NOT a chart over time. The record stores which missions
+					were finished but never when, so a trend line would be invented. The
+					note below says so, rather than leaving a parent to assume the silence
+					is an oversight.
+				-->
+				<p class="note small">
+					Aplikasi ini tidak menampilkan grafik kemajuan per hari karena data waktu tidak disimpan —
+					hanya hasil akhir tiap misi. Menampilkan grafiknya berarti mengarang polanya.
+				</p>
+			</section>
+
+			{#if practice.length > 0}
+				<section class="practice dp-card">
+					<h2>Latihan yang Membantu</h2>
+					<p class="legend legend--prose">
+						Misi yang masih memakan kesalahan, paling sering salah lebih dulu. Mengulangnya membantu,
+						dan tidak ada hukuman untuk mengulang.
+					</p>
+					<ul class="practice-list">
+						{#each practice as item (item.areaName)}
+							<li class="practice-item">
+								<span class="area-icon" aria-hidden="true">{item.areaIcon}</span>
+								<div>
+									<span class="area-name">{item.areaName}</span>
+									<ul class="practice-missions">
+										{#each item.missionTitles as title (title)}
+											<li>{title}</li>
+										{/each}
+									</ul>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+
+			{#if ideas.length > 0}
+				<section class="ideas dp-card">
+					<h2>Ide Bermain Tanpa Layar</h2>
+					<p class="legend legend--prose">
+						Dipilih dari area yang sudah dicoba anak. Ini saran kegiatan bersama, bukan bagian dari
+						permainan — aplikasi tidak mencatat apakah kegiatan ini dilakukan.
+					</p>
+					<ul class="idea-list">
+						{#each ideas as idea (idea.headline)}
+							<li class="idea">
+								<span class="idea-head">{idea.headline}</span>
+								<span class="idea-detail">{idea.detail}</span>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
 		{/if}
 
 		<section class="numbers dp-card">
@@ -318,7 +455,10 @@
 	}
 	.gate,
 	.numbers,
-	.settings {
+	.settings,
+	.mastery,
+	.practice,
+	.ideas {
 		max-width: 720px;
 		margin: 0 auto 1.2rem;
 	}
@@ -374,6 +514,13 @@
 		font-size: 0.85rem;
 		color: #5b6b80;
 		align-items: center;
+	}
+	/* A legend that is a sentence, not a row of colour keys. `display: flex`
+	   turns every inline <strong> into its own column, which broke a paragraph
+	   into ragged fragments. */
+	.legend--prose {
+		display: block;
+		line-height: 1.55;
 	}
 	.dot {
 		display: inline-block;
@@ -482,6 +629,73 @@
 		color: #2f8a4a;
 		white-space: nowrap;
 	}
+	/* Mastery counts: four equal tiles, printable as plain numbers. */
+	.mastery-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: 0.7rem;
+		margin: 0.9rem 0;
+	}
+	.stat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.2rem;
+		padding: 0.8rem 0.4rem;
+		border-radius: 12px;
+		background: #eef2f7;
+	}
+	.stat-value {
+		font-size: 1.8rem;
+		font-weight: 800;
+		line-height: 1;
+	}
+	.stat-label {
+		font-size: 0.8rem;
+		color: #6b7c92;
+		text-align: center;
+	}
+
+	.practice-list,
+	.idea-list {
+		list-style: none;
+		margin: 0.8rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+	.practice-item {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.8rem;
+		padding: 0.7rem 0.9rem;
+		border-radius: 12px;
+		background: #fff6ea;
+		border-left: 5px solid #ffb545;
+	}
+	.practice-missions {
+		margin: 0.3rem 0 0;
+		padding-left: 1.1rem;
+		color: #5b6b80;
+	}
+	.idea {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.7rem 0.9rem;
+		border-radius: 12px;
+		background: #eef7ff;
+		border-left: 5px solid #4aa8ff;
+	}
+	.idea-head {
+		font-weight: 700;
+	}
+	.idea-detail {
+		color: #5b6b80;
+		line-height: 1.5;
+	}
+
 	.num-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));

@@ -58,7 +58,11 @@ log(!!gl, 'WebGL context', gl ?? 'none');
 log((await page.screenshot()).length > 20000, 'main menu renders');
 
 // The menu offers all five areas now that each has missions.
-log((await page.locator('.area').count()) === 5, 'menu lists five areas');
+// Read the expected count from the app rather than hard-coding 5: the island
+// gained a sixth area (Pulau Musik), and a literal here turned a correct
+// addition into a red test.
+const areaShortcuts = await page.locator('.area').count();
+log(areaShortcuts === 6, 'menu lists every area', `${areaShortcuts} shortcuts`);
 
 await page.getByRole('button', { name: 'Main' }).click({ force: true });
 await page.waitForTimeout(2500);
@@ -149,7 +153,7 @@ if (!nums) {
 	// Per-area breakdown: one row per area, and the counting row must show
 	// real progress rather than an empty bar.
 	const areaRows = await page.locator('.area').count();
-	log(areaRows === 5, 'dashboard shows one row per learning area', `${areaRows} rows`);
+	log(areaRows === areaShortcuts, 'dashboard shows one row per learning area', `${areaRows} rows vs ${areaShortcuts} areas`);
 	const countingRow = await page.locator('.area[data-area="counting"]').innerText();
 	log(
 		/[1-9]\d* dari \d+ misi selesai/.test(countingRow),
@@ -488,6 +492,153 @@ sub = await state();
 log(sub.phase === 'MISSION_SUCCESS' || sub.phase === 'WORLD_EXPLORATION', 'the right remainder wins', sub.phase);
 await page.waitForTimeout(2600);
 log((await page.locator('.mission').count()) === 0, 'subtract panel closes after completion');
+
+// --- pick-by-sound mission (Hutan Hewan) --------------------------------
+// The question is audio, so the first thing asserted is that the buttons are
+// LOCKED until the cry has played. A child tapping into silence must not be
+// scored, and this is the one bug in this activity that would hurt.
+await page.evaluate(() => window.__duniaEngine.startMissionForTest('sound-kucing'));
+await page.waitForTimeout(1200);
+let snd = await state();
+log(snd.mission === 'sound-kucing', 'pick-by-sound mission starts', snd.mission ?? 'none');
+log(snd.missionKind === 'pick-by-sound', 'mission kind is pick-by-sound', snd.missionKind);
+// No picture is shown: the whole question is the cry.
+log(
+	(await page.locator('.prompt-icon').count()) === 0,
+	'no animal picture is shown (it would answer the question)'
+);
+log((await page.locator('.speaker').count()) === 1, 'a listen button is offered');
+const lockedButtons = await page.locator('.answers button[disabled]').count();
+log(lockedButtons === 3, 'every answer button starts locked', `${lockedButtons} locked`);
+log(snd.soundHeard === false, 'the session reports the sound is unheard');
+
+// Wait for the cry (the engine plays it ~2.4 s after the mission starts).
+let heard = false;
+for (let i = 0; i < 24 && !heard; i++) {
+	await page.waitForTimeout(250);
+	heard = (await state()).soundHeard === true;
+}
+log(heard, 'the cry plays and unlocks the buttons');
+log(
+	(await page.locator('.answers button[disabled]').count()) === 0,
+	'the buttons unlock once the sound has been heard'
+);
+
+// A wrong animal wobbles but does not end the mission.
+await page.evaluate(() => window.__duniaEngine.answerForTest('Sapi'));
+await page.waitForTimeout(1100);
+snd = await state();
+log(snd.phase === 'MISSION_ACTIVE', 'a wrong animal keeps the child in the mission', snd.phase);
+
+await page.evaluate(() => window.__duniaEngine.answerForTest('Kucing'));
+await page.waitForTimeout(900);
+snd = await state();
+log(
+	snd.phase === 'MISSION_SUCCESS' || snd.phase === 'WORLD_EXPLORATION',
+	'the right animal wins',
+	snd.phase
+);
+await page.waitForTimeout(2600);
+log((await page.locator('.mission').count()) === 0, 'sound panel closes after completion');
+
+// --- continue-pattern mission (Kebun Warna) ------------------------------
+await page.evaluate(() => window.__duniaEngine.startMissionForTest('pattern-merah-kuning'));
+await page.waitForTimeout(1800);
+let pat = await state();
+log(pat.mission === 'pattern-merah-kuning', 'pattern mission starts', pat.mission ?? 'none');
+log(pat.missionKind === 'continue-pattern', 'mission kind is continue-pattern', pat.missionKind);
+// Five shown swatches plus the empty slot.
+const swatches = await page.locator('.pattern .swatch:not(.swatch--gap)').count();
+log(swatches === 5, 'five pattern items are drawn', String(swatches));
+log((await page.locator('.pattern .swatch--gap').count()) === 1, 'one slot is left for the answer');
+log((await page.locator('.answers .answer--swatch').count()) === 3, 'three colour buttons are offered');
+
+// Merah is on offer but is the wrong next item, so it must not win.
+await page.evaluate(() => window.__duniaEngine.answerForTest('Merah'));
+await page.waitForTimeout(1100);
+pat = await state();
+log(pat.phase === 'MISSION_ACTIVE', 'a wrong colour keeps the child in the mission', pat.phase);
+
+await page.evaluate(() => window.__duniaEngine.answerForTest('Kuning'));
+await page.waitForTimeout(900);
+pat = await state();
+log(
+	pat.phase === 'MISSION_SUCCESS' || pat.phase === 'WORLD_EXPLORATION',
+	'the right colour wins',
+	pat.phase
+);
+await page.waitForTimeout(2600);
+log((await page.locator('.mission').count()) === 0, 'pattern panel closes after completion');
+
+// --- compare-pitch mission (Pulau Musik) --------------------------------
+// The newest area, and the one with the strictest listening rule: TWO tones
+// must play before anything can be answered, because one sound cannot be
+// compared to nothing.
+await page.evaluate(() => window.__duniaEngine.startMissionForTest('pitch-tinggi'));
+await page.waitForTimeout(1200);
+let pit = await state();
+log(pit.mission === 'pitch-tinggi', 'pitch mission starts', pit.mission ?? 'none');
+log(pit.missionKind === 'compare-pitch', 'mission kind is compare-pitch', pit.missionKind);
+log((await page.locator('.pitch-dots .pitch-dot').count()) === 2, 'two tone indicators are drawn');
+log((await page.locator('.answers button[disabled]').count()) === 2, 'both answers start locked');
+
+// Both tones need an unlocked AudioContext, which only a real gesture gives.
+// Tapping the speaker is exactly what a child would do — and it is a fairer
+// test than waiting, because it exercises the path a stuck child would take.
+let bothHeard = false;
+for (let i = 0; i < 32 && !bothHeard; i++) {
+	await page.waitForTimeout(250);
+	bothHeard = (await state()).pitchHeard === 2;
+}
+if (!bothHeard) {
+	await page.locator('.speaker').click({ force: true });
+	for (let i = 0; i < 20 && !bothHeard; i++) {
+		await page.waitForTimeout(250);
+		bothHeard = (await state()).pitchHeard === 2;
+	}
+}
+log(bothHeard, 'both tones play (or replay on tap)');
+log((await state()).pitchStep !== 'answered-correct', 'the mission is not won by listening alone');
+log(
+	(await page.locator('.answers button[disabled]').count()) === 0,
+	'answers unlock once both tones have played'
+);
+
+// 'Rendah' is a real button but the wrong answer for "which is higher".
+await page.evaluate(() => window.__duniaEngine.answerForTest('Rendah'));
+await page.waitForTimeout(1100);
+pit = await state();
+log(pit.phase === 'MISSION_ACTIVE', 'a wrong pitch keeps the child in the mission', pit.phase);
+
+await page.evaluate(() => window.__duniaEngine.answerForTest('Tinggi'));
+await page.waitForTimeout(900);
+pit = await state();
+log(
+	pit.phase === 'MISSION_SUCCESS' || pit.phase === 'WORLD_EXPLORATION',
+	'the right pitch wins',
+	pit.phase
+);
+await page.waitForTimeout(2600);
+log((await page.locator('.mission').count()) === 0, 'pitch panel closes after completion');
+
+// The new area must be reachable from the menu like every other one.
+await page.getByRole('button', { name: 'Keluar' }).click({ force: true }).catch(() => {});
+await page.waitForTimeout(1200);
+const musicShortcut = await page.getByRole('button', { name: 'Pulau Musik' }).count();
+log(musicShortcut === 1, 'Pulau Musik has a menu shortcut', String(musicShortcut));
+if (musicShortcut === 1) {
+	await page.getByRole('button', { name: 'Pulau Musik' }).click({ force: true });
+	await page.waitForTimeout(2200);
+	const afterPick = await state();
+	log(
+		afterPick.mission?.startsWith('pitch-') === true,
+		'the shortcut opens a music mission',
+		afterPick.mission ?? 'none'
+	);
+	await page.waitForTimeout(2600);
+	await page.getByRole('button', { name: 'Keluar' }).click({ force: true }).catch(() => {});
+	await page.waitForTimeout(1200);
+}
 
 // --- Bimo, the visible guide -------------------------------------------
 // He has no mechanics, so what is asserted is that he is alive: present,
