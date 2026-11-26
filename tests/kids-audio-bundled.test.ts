@@ -62,6 +62,21 @@ describe('bundled narration', () => {
 		}
 	});
 
+	it('ships no audio file the manifest does not name', () => {
+		// The test above only checks manifest -> file. Nothing checked file ->
+		// manifest, so an orphan could sit in static/audio/ forever: shipped in
+		// the build, costing bytes, and impossible to reach because the runtime
+		// looks every line up through the manifest. One such file
+		// (`letter-b.mp3`, superseded by `mission-letter-b.mp3`) had been carried
+		// since the polish commit. This is the guard that would have caught it.
+		//
+		// `sox`/`afconvert` scratch files and the manifest itself are not MP3s,
+		// so `audioFiles` already excludes them.
+		const named = new Set(Object.values(manifest));
+		const orphans = audioFiles.filter((f) => !named.has(f));
+		expect(orphans, `unreferenced audio files: ${orphans.join(', ')}`).toEqual([]);
+	});
+
 	it('the exact strings the engine speaks resolve to bundled audio', () => {
 		const spokenByEngine = [
 			'Halo teman-teman! Aku Bubu. Ayo kita bermain!',
