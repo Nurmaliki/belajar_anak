@@ -161,6 +161,20 @@ export class CharacterController {
 		const groundY = terrainHeight(this.rig.root.position.x, this.rig.root.position.z);
 		this.rig.root.position.y = groundY + this.jumpY;
 
+		// Ground shadow: shrinks and fades as Bubu rises, so a hop reads as
+		// height rather than as the bunny growing.
+		//
+		// The rig's shadow is parented to `root`, which the controller lifts by
+		// `jumpY` during a hop — so left alone it would rise *with* Bubu and sit
+		// in mid-air, the exact opposite of the shadow's purpose. It is therefore
+		// pushed back down by the jump height each frame, and scaled down as the
+		// real sun shadow would: smaller and fainter the further from the ground.
+		const lift = this.jumpY;
+		this.rig.shadow.position.y = 0.015 - lift;
+		const shrink = 1 / (1 + lift * 0.55);
+		this.rig.shadow.scale.setScalar(shrink);
+		(this.rig.shadow.material as THREE.MeshBasicMaterial).opacity = 0.16 * shrink;
+
 		// Face the direction of travel.
 		const speed = Math.hypot(this.velocity.x, this.velocity.z);
 		if (speed > 0.25) {

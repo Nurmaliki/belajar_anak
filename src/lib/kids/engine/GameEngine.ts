@@ -253,6 +253,28 @@ export class GameEngine {
 			greetBimoForTest: () => this.greetBimo(),
 			/** Dress Bubu the way the wardrobe does. */
 			setWearingForTest: (id: string) => this.setWearing(id, false),
+			/**
+			 * Movement test hooks.
+			 *
+			 * The joystick is a real DOM control a headless page cannot drag
+			 * reliably, and the shadow lives inside the rig where no assertion could
+			 * see it. These expose exactly those two things and nothing else, so the
+			 * motion tests can check what a child would actually see.
+			 */
+			setJoystickForTest: (x: number, y: number) => this.setJoystick(x, y),
+			jumpForTest: () => this.bubu.requestJump(),
+			debugShadow: () => {
+				const shadow = this.bubu.rig.shadow;
+				const material = shadow.material as THREE.MeshBasicMaterial;
+				return {
+					/** Height of the mesh above the ground, in world units. */
+					height: this.bubu.position.y - terrainHeight(this.bubu.position.x, this.bubu.position.z),
+					/** The disc's own y offset inside the rig (pushed down as Bubu rises). */
+					meshY: shadow.position.y,
+					scale: shadow.scale.x,
+					opacity: material.opacity
+				};
+			},
 			debugState: () => ({
 				apples: this.garden.activeApples.length,
 				pickables: this.interaction.pickableIds,
